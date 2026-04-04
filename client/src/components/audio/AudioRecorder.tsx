@@ -10,33 +10,7 @@ export interface AudioRecorderProps {
   maxDuration?: number;
 }
 
-// Placeholder for WaveformCanvas — will be replaced when the component is built
-interface WaveformCanvasPlaceholderProps {
-  analyserNode: AnalyserNode | null;
-  isActive: boolean;
-}
-
-function WaveformCanvas({ analyserNode, isActive }: WaveformCanvasPlaceholderProps) {
-  // Placeholder renders a static bar row until the real WaveformCanvas is built
-  return (
-    <div
-      className="flex items-end justify-center gap-0.5 w-full h-16"
-      aria-hidden="true"
-      data-analyser={analyserNode ? 'connected' : 'disconnected'}
-      data-active={isActive}
-    >
-      {Array.from({ length: 40 }, (_, i) => (
-        <div
-          key={i}
-          className={`w-1 rounded-sm transition-all duration-100 ${
-            isActive ? 'bg-primary/80' : 'bg-on-surface-muted/30'
-          }`}
-          style={{ height: `${isActive ? 20 + Math.sin(i * 0.6) * 16 : 4}px` }}
-        />
-      ))}
-    </div>
-  );
-}
+import { WaveformCanvas } from '@/components/audio/WaveformCanvas';
 
 // Extract a waveform snapshot array (256 values normalised 0–1) from an AnalyserNode
 function captureWaveformSnapshot(analyser: AnalyserNode): number[] {
@@ -182,7 +156,9 @@ export function AudioRecorder({ onRecordingComplete, maxDuration = MAX_DURATION 
       <div className="w-full bg-surface-elevated rounded-xl px-4 py-3">
         <WaveformCanvas
           analyserNode={analyserNode}
-          isActive={state === 'recording'}
+          waveformData={store.waveformData.length > 0 ? store.waveformData : undefined}
+          mode={state === 'recording' ? 'live' : 'static'}
+          height={80}
         />
       </div>
 
