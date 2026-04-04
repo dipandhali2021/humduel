@@ -1,0 +1,18 @@
+{
+  "project_name": "HumDuel",
+  "project_description": "Social melody guessing game — hum a tune, share a waveform card, challenge friends to guess the song",
+  "current_phase": "PLANNING",
+  "current_sprint": 0,
+  "research_domain": "fun engaging consumer web apps",
+  "project_type_preference": "web app",
+  "execution_mode": "subagent",
+  "agent_teams": {
+    "available": false,
+    "env_var_set": false,
+    "tools_available": true,
+    "phases_using_teams": [],
+    "fallback_count": 0
+  },
+  "created_at": "2026-04-04",
+  "research_cycles": 1
+}
