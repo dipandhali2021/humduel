@@ -1,8 +1,9 @@
 {
   "project_name": "HumDuel",
   "project_description": "Social melody guessing game — hum a tune, share a waveform card, challenge friends to guess the song",
-  "current_phase": "PLANNING",
+  "current_phase": "DESIGN",
   "current_sprint": 0,
+  "total_planned_sprints": 4,
   "research_domain": "fun engaging consumer web apps",
   "project_type_preference": "web app",
   "execution_mode": "subagent",
@@ -13,6 +14,43 @@
     "phases_using_teams": [],
     "fallback_count": 0
   },
+  "tech_stack": {
+    "project_type": "web full-stack",
+    "primary_language": "TypeScript",
+    "framework": "React + Express",
+    "database": "SQLite",
+    "deployment_target": "Vercel + Railway"
+  },
   "created_at": "2026-04-04",
-  "research_cycles": 1
+  "research_cycles": 1,
+  "phase_history": [
+    {
+      "phase": "RESEARCH",
+      "started_at": "2026-04-04",
+      "completed_at": "2026-04-04",
+      "agents_invoked": ["trend-analyst", "market-researcher", "competitive-analyst", "research-analyst"],
+      "artifacts_produced": [
+        "research/trend-scan-2026-04-04.md",
+        "research/market-analysis-2026-04-04.md",
+        "research/competitive-landscape-2026-04-04.md",
+        "research/project-selection.md"
+      ],
+      "outcome": "success"
+    },
+    {
+      "phase": "PLANNING",
+      "started_at": "2026-04-04",
+      "completed_at": "2026-04-04",
+      "agents_invoked": ["product-manager", "business-analyst", "ux-researcher", "project-manager", "scrum-master"],
+      "artifacts_produced": [
+        "architecture/product-vision.md",
+        "architecture/requirements.md",
+        "architecture/user-personas.md",
+        "architecture/project-plan.md",
+        "architecture/sprint-structure.md",
+        "architecture/roadmap.md"
+      ],
+      "outcome": "success"
+    }
+  ]
 }
