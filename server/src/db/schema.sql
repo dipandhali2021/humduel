@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS challenges (
   song_title TEXT NOT NULL,
   song_artist TEXT NOT NULL,
   song_id TEXT,
+  duration_seconds REAL NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   expires_at TEXT NOT NULL
 );
@@ -19,6 +20,7 @@ CREATE TABLE IF NOT EXISTS guesses (
   correct INTEGER NOT NULL DEFAULT 0,
   attempt_number INTEGER NOT NULL,
   time_ms INTEGER,
+  session_id TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -42,3 +44,5 @@ CREATE TABLE IF NOT EXISTS users (
   best_streak INTEGER DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_guesses_session ON guesses(challenge_id, session_id);

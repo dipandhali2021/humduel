@@ -16,10 +16,12 @@ dist/
 *.sqlite3
 
 # Uploaded audio files
+uploads/
 server/uploads/*
 !server/uploads/.gitkeep
 
 # Local data directory
+data/
 server/data/*
 !server/data/.gitkeep
 

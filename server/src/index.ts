@@ -2,9 +2,10 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 
-import { PORT, CORS_ORIGIN, NODE_ENV } from './config.js';
+import { PORT, CORS_ORIGIN, NODE_ENV, UPLOAD_DIR } from './config.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { ensureUploadDir } from './services/audioService.js';
 
 // Route modules
 import healthRouter from './routes/health.js';
@@ -15,6 +16,9 @@ import songsRouter from './routes/songs.js';
 
 // Initialize database (runs schema migration on startup)
 import './database.js';
+
+// Ensure the uploads directory exists before handling any requests
+ensureUploadDir();
 
 const app = express();
 
@@ -36,6 +40,10 @@ app.use(express.urlencoded({ extended: true, limit: '50kb' }));
 // --- Rate limiting ---
 app.use('/api', generalLimiter);
 
+// --- Static audio file serving ---
+// Serves files from UPLOAD_DIR at the /audio/ path prefix.
+app.use('/audio', express.static(UPLOAD_DIR));
+
 // --- Routes ---
 app.use('/api/health', healthRouter);
 app.use('/api/challenges', challengesRouter);
@@ -49,6 +57,7 @@ app.use(errorHandler);
 // --- Server startup ---
 const server = app.listen(PORT, () => {
   console.log(`[HumDuel] Server running on port ${PORT} (${NODE_ENV})`);
+  console.log(`[HumDuel] Audio uploads served from ${UPLOAD_DIR} at /audio/`);
 });
 
 // --- Graceful shutdown ---
