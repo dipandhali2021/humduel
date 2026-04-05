@@ -13,6 +13,7 @@ import challengesRouter from './routes/challenges.js';
 import dailyRouter from './routes/daily.js';
 import leaderboardRouter from './routes/leaderboard.js';
 import songsRouter from './routes/songs.js';
+import usersRouter from './routes/users.js';
 
 // Initialize database (runs schema migration on startup)
 import './database.js';
@@ -50,6 +51,7 @@ app.use('/api/challenges', challengesRouter);
 app.use('/api/daily', dailyRouter);
 app.use('/api/leaderboard', leaderboardRouter);
 app.use('/api/songs', songsRouter);
+app.use('/api/users', usersRouter);
 
 // --- Global error handler (must be registered last) ---
 app.use(errorHandler);
