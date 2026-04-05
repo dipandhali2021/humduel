@@ -54,4 +54,18 @@
       scroll-behavior: smooth;
     }
   }
+
+  /* Skeleton pulse animation for loading states (CLS prevention) */
+  .skeleton {
+    @apply animate-pulse rounded-xl bg-surface-elevated;
+  }
+
+  /* Reserve space for images / media to prevent CLS */
+  .aspect-square { aspect-ratio: 1 / 1; }
+  .aspect-card   { aspect-ratio: 16 / 9; }
+
+  /* Contain layout shift for dynamically loaded content */
+  .contain-layout {
+    contain: layout;
+  }
 }

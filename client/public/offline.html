@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#7C3AED" />
+    <title>HumDuel — Offline</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: 'Inter', system-ui, sans-serif;
+        background-color: #1E1B2E;
+        color: #FFFFFF;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 24px;
+      }
+      .container {
+        text-align: center;
+        max-width: 360px;
+      }
+      .icon {
+        font-size: 64px;
+        margin-bottom: 24px;
+      }
+      h1 {
+        font-family: 'Space Grotesk', system-ui, sans-serif;
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 12px;
+        color: #7C3AED;
+      }
+      p {
+        font-size: 16px;
+        color: #A0A0B8;
+        line-height: 1.5;
+        margin-bottom: 24px;
+      }
+      button {
+        background: #7C3AED;
+        color: white;
+        border: none;
+        padding: 12px 32px;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      button:hover {
+        background: #6D28D9;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="icon" aria-hidden="true">🎵</div>
+      <h1>You're Offline</h1>
+      <p>HumDuel needs an internet connection to play. Check your connection and try again.</p>
+      <button onclick="window.location.reload()">Retry</button>
+    </div>
+  </body>
+</html>

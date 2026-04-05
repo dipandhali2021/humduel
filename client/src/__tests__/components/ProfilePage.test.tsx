@@ -368,6 +368,77 @@ describe('ProfilePage — nickname editing', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Analytics opt-out
+// ---------------------------------------------------------------------------
+
+describe('ProfilePage — analytics opt-out toggle', () => {
+  it('shows the Privacy section heading for existing users', () => {
+    mockUseUser.mockReturnValue(buildDefaultReturn());
+    renderPage();
+    expect(screen.getByText(/privacy/i)).toBeInTheDocument();
+  });
+
+  it('shows the "Usage Analytics" label', () => {
+    mockUseUser.mockReturnValue(buildDefaultReturn());
+    renderPage();
+    expect(screen.getByText('Usage Analytics')).toBeInTheDocument();
+  });
+
+  it('renders a toggle switch for analytics', () => {
+    mockUseUser.mockReturnValue(buildDefaultReturn());
+    renderPage();
+    expect(screen.getByRole('switch', { name: /toggle usage analytics/i })).toBeInTheDocument();
+  });
+
+  it('toggle is ON (checked) by default when user has not opted out', () => {
+    mockUseUser.mockReturnValue(buildDefaultReturn());
+    renderPage();
+    const toggle = screen.getByRole('switch', { name: /toggle usage analytics/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('toggle is OFF when user has opted out', () => {
+    localStorage.setItem('humduel:analyticsOptOut', 'true');
+    mockUseUser.mockReturnValue(buildDefaultReturn());
+    renderPage();
+    const toggle = screen.getByRole('switch', { name: /toggle usage analytics/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('clicking toggle opts out and sets localStorage', () => {
+    mockUseUser.mockReturnValue(buildDefaultReturn());
+    renderPage();
+    const toggle = screen.getByRole('switch', { name: /toggle usage analytics/i });
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(localStorage.getItem('humduel:analyticsOptOut')).toBe('true');
+  });
+
+  it('clicking toggle twice opts out then back in', () => {
+    mockUseUser.mockReturnValue(buildDefaultReturn());
+    renderPage();
+    const toggle = screen.getByRole('switch', { name: /toggle usage analytics/i });
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    expect(localStorage.getItem('humduel:analyticsOptOut')).toBeNull();
+  });
+
+  it('does not show the privacy section for new users', () => {
+    mockUseUser.mockReturnValue(
+      buildDefaultReturn({ loading: false, user: null, stats: null, isNewUser: true }),
+    );
+    renderPage();
+    expect(screen.queryByText(/privacy/i)).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Error state
 // ---------------------------------------------------------------------------
 

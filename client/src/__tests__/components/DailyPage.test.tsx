@@ -1,5 +1,5 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { UseDailyChallengeReturn } from '@/hooks/useDailyChallenge';
 import type { DailyChallengeResponse, DailyGuessResponse, DailyResultResponse } from '@/types';

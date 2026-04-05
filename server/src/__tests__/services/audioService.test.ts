@@ -10,9 +10,10 @@
 
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
 import { vi, describe, it, expect, afterAll, beforeEach } from 'vitest';
-import type { File as MulterFile } from 'multer';
+
+// Multer file type
+type MulterFile = Express.Multer.File;
 
 // ---------------------------------------------------------------------------
 // Create the temporary directory in vi.hoisted() so it exists before the
@@ -80,7 +81,7 @@ function makeFile(overrides: Partial<MulterFile> = {}): Express.Multer.File {
     destination: '',
     filename: '',
     path: '',
-    stream: null as unknown as NodeJS.ReadableStream,
+    stream: process.stdin, // Use a real Readable stream
     ...overrides,
   };
 }

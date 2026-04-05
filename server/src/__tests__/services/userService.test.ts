@@ -18,7 +18,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 const { testDb } = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const Database = require('better-sqlite3') as typeof import('better-sqlite3').default;
+  const Database = require('better-sqlite3');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const fs = require('fs') as typeof import('fs');
   // eslint-disable-next-line @typescript-eslint/no-require-imports

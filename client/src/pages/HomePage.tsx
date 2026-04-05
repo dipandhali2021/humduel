@@ -167,7 +167,7 @@ const HomePage = () => {
 
         {/* ── Record button ─────────────────────────────────────────────────── */}
         <section className="flex flex-col items-center gap-3 pb-10">
-          <HeroRecordButton onClick={() => navigate('/record')} />
+          <HeroRecordButton onClick={() => navigate('/app/record')} />
           <span className="text-on-surface-muted text-sm font-label">
             Tap to Hum
           </span>
@@ -177,7 +177,7 @@ const HomePage = () => {
         <section className="grid grid-cols-2 gap-3 pb-10" aria-label="Quick actions">
           {/* Daily Challenge */}
           <Card
-            onClick={() => navigate('/daily')}
+            onClick={() => navigate('/app/daily')}
             className="flex flex-col gap-2"
           >
             <span className="w-9 h-9 rounded-full bg-secondary/15 flex items-center justify-center text-secondary">
@@ -195,7 +195,7 @@ const HomePage = () => {
 
           {/* Challenge a Friend */}
           <Card
-            onClick={() => navigate('/record')}
+            onClick={() => navigate('/app/record')}
             className="flex flex-col gap-2"
           >
             <span className="w-9 h-9 rounded-full bg-tertiary/15 flex items-center justify-center text-tertiary">

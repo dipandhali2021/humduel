@@ -5,6 +5,7 @@ import Card from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useUser } from '@/hooks/useUser';
+import { isAnalyticsOptedOut, setAnalyticsOptOut } from '@/hooks/useAnalytics';
 import type { RecentGame } from '@/types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -558,6 +559,56 @@ function RecentGameRow({ game }: { game: RecentGame }) {
   );
 }
 
+// ─── Analytics opt-out toggle ────────────────────────────────────────────────
+
+function AnalyticsOptOut() {
+  const [optedOut, setOptedOut] = useState(isAnalyticsOptedOut);
+
+  const handleToggle = () => {
+    const next = !optedOut;
+    setAnalyticsOptOut(next);
+    setOptedOut(next);
+  };
+
+  return (
+    <div>
+      <h2 className="font-label text-xs font-semibold text-on-surface-muted uppercase tracking-widest mb-3">
+        Privacy
+      </h2>
+      <Card className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-label text-sm text-white font-medium">
+            Usage Analytics
+          </p>
+          <p className="font-label text-[11px] text-on-surface-muted">
+            Help improve HumDuel by sharing anonymous usage data. No personal
+            information is ever collected.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={!optedOut}
+          aria-label="Toggle usage analytics"
+          onClick={handleToggle}
+          className={[
+            'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-surface',
+            optedOut ? 'bg-surface-hover' : 'bg-primary',
+          ].join(' ')}
+        >
+          <span
+            aria-hidden="true"
+            className={[
+              'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+              optedOut ? 'translate-x-0' : 'translate-x-5',
+            ].join(' ')}
+          />
+        </button>
+      </Card>
+    </div>
+  );
+}
+
 // ─── Stats view (loaded user) ─────────────────────────────────────────────────
 
 interface StatsViewProps {
@@ -693,6 +744,9 @@ function StatsView({
           </div>
         )}
       </div>
+
+      {/* Privacy settings */}
+      <AnalyticsOptOut />
     </div>
   );
 }

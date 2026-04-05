@@ -133,22 +133,22 @@ interface NavTab {
 
 const tabs: NavTab[] = [
   {
-    to: '/',
+    to: '/app',
     label: 'Home',
     icon: (filled) => <HomeIcon filled={filled} />,
   },
   {
-    to: '/daily',
+    to: '/app/daily',
     label: 'Daily',
     icon: (filled) => <CalendarIcon filled={filled} />,
   },
   {
-    to: '/leaderboard',
+    to: '/app/leaderboard',
     label: 'Ranks',
     icon: (filled) => <TrophyIcon filled={filled} />,
   },
   {
-    to: '/profile',
+    to: '/app/profile',
     label: 'Profile',
     icon: (filled) => <UserIcon filled={filled} />,
   },
@@ -168,7 +168,7 @@ const MobileNav = () => {
           <NavLink
             key={tab.to}
             to={tab.to}
-            end={tab.to === '/'}
+            end={tab.to === '/app'}
             className={({ isActive }) =>
               [
                 'flex-1 flex flex-col items-center justify-center gap-0.5 h-full',

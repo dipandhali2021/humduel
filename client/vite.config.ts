@@ -18,6 +18,24 @@ export default defineConfig({
       },
     },
   },
+
+  // ── Build optimizations ──────────────────────────────────────────────────
+  build: {
+    target: 'es2020',
+    // Enable CSS code splitting per async chunk
+    cssCodeSplit: true,
+    rollupOptions: {
+      output: {
+        // Separate vendor chunks for better caching
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-router': ['react-router-dom'],
+          'vendor-state': ['zustand'],
+        },
+      },
+    },
+  },
+
   test: {
     environment: 'jsdom',
     globals: true,

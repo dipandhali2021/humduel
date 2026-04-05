@@ -3,28 +3,101 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Hum a tune, challenge your friends. The social melody guessing game." />
-    <meta name="theme-color" content="#1E1B2E" />
 
-    <!-- Google Fonts: Space Grotesk, Inter, DM Sans -->
+    <!-- SEO meta tags -->
+    <title>HumDuel - Social Melody Guessing Game</title>
+    <meta name="description" content="Hum a tune, challenge your friends to guess the melody. Record hums, share waveform cards, compete on leaderboards, and play daily puzzles." />
+    <meta name="keywords" content="music game, melody guessing, hum challenge, social game, music quiz, daily puzzle, song guessing, waveform" />
+    <meta name="author" content="HumDuel" />
+    <meta name="theme-color" content="#7C3AED" />
+    <link rel="canonical" href="https://humduel.com/" />
+
+    <!-- Open Graph tags for social sharing -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="HumDuel - Social Melody Guessing Game" />
+    <meta property="og:description" content="Hum a tune, challenge your friends to guess the melody. The social music game with daily puzzles and leaderboards." />
+    <meta property="og:site_name" content="HumDuel" />
+    <meta property="og:url" content="https://humduel.com/" />
+    <meta property="og:image" content="https://humduel.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter Card tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="HumDuel - Social Melody Guessing Game" />
+    <meta name="twitter:description" content="Hum a tune, challenge your friends to guess the melody. The social music game with daily puzzles and leaderboards." />
+    <meta name="twitter:image" content="https://humduel.com/og-image.png" />
+
+    <!-- JSON-LD structured data -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "HumDuel",
+        "description": "A social melody guessing game where you hum tunes and challenge friends to guess them.",
+        "url": "https://humduel.com",
+        "applicationCategory": "GameApplication",
+        "genre": "Music",
+        "operatingSystem": "Web",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "featureList": [
+          "Record hums",
+          "Waveform cards",
+          "Challenge friends",
+          "Daily puzzles",
+          "Leaderboards"
+        ]
+      }
+    </script>
+
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="HumDuel" />
+
+    <!-- Preconnect to font CDN (critical for LCP) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- Preload the headline font (Space Grotesk) to reduce LCP -->
+    <link
+      rel="preload"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      as="style"
+    />
+
+    <!-- Load all fonts with display=swap to prevent invisible text (FOIT) -->
     <link
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=DM+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
 
-    <title>HumDuel — Hum a Tune, Challenge Friends</title>
-
     <style>
-      /* Critical inline style to prevent flash of unstyled background */
+      /* Critical inline styles to prevent CLS */
       html,
       body {
         background-color: #1e1b2e;
         margin: 0;
         padding: 0;
       }
+
+      /* Reserve bottom nav space to prevent layout shift */
+      #root {
+        min-height: 100dvh;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+
+      /* Font-display fallback dimensions to reduce CLS from web fonts */
+      .font-headline { font-family: "Space Grotesk", system-ui, sans-serif; }
+      .font-body { font-family: Inter, system-ui, sans-serif; }
+      .font-label { font-family: "DM Sans", system-ui, sans-serif; }
     </style>
   </head>
   <body>

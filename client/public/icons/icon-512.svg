@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="64" fill="#1E1B2E"/>
+  <g transform="translate(256,230)">
+    <circle cx="0" cy="0" r="150" fill="none" stroke="#7C3AED" stroke-width="12" opacity="0.3"/>
+    <circle cx="0" cy="0" r="100" fill="none" stroke="#7C3AED" stroke-width="12" opacity="0.5"/>
+    <circle cx="0" cy="0" r="50" fill="#7C3AED"/>
+    <path d="M-18,-14 L-18,14 L14,0 Z" fill="#1E1B2E"/>
+  </g>
+  <text x="256" y="440" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="700" font-size="52" fill="#FFFFFF">HumDuel</text>
+</svg>
