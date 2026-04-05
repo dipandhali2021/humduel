@@ -132,3 +132,93 @@ export interface SongSearchResult {
   title: string;
   artist: string;
 }
+
+// ─── Sprint 3 API types ───────────────────────────────────────────────────────
+
+/** Response from GET /api/daily */
+export interface DailyChallengeResponse {
+  date: string;
+  puzzleNumber: number;
+  songHint: string;
+  maxAttempts: number;
+  attemptsUsed: number;
+  completed: boolean;
+  correct: boolean | null;
+}
+
+/** Response from POST /api/daily/guess */
+export interface DailyGuessResponse {
+  correct: boolean;
+  attemptsUsed: number;
+  attemptsRemaining: number;
+  maxAttempts: number;
+  timeTakenSeconds: number | null;
+  song: SongMatch | null;
+}
+
+/** Response from GET /api/daily/result */
+export interface DailyResultResponse {
+  date: string;
+  puzzleNumber: number;
+  completed: boolean;
+  correct: boolean;
+  attemptsUsed: number;
+  maxAttempts: number;
+  timeTakenSeconds: number | null;
+  song: SongMatch;
+  shareText: string;
+}
+
+/** Response from GET /api/leaderboard */
+export interface LeaderboardResponse {
+  date: string;
+  puzzleNumber: number;
+  entries: LeaderboardEntryResponse[];
+}
+
+export interface LeaderboardEntryResponse {
+  rank: number;
+  nickname: string;
+  userId: string;
+  attemptsUsed: number;
+  timeTakenSeconds: number;
+  completedAt: string;
+}
+
+/** Response from POST /api/users or GET /api/users/:id */
+export interface UserResponse {
+  id: string;
+  nickname: string;
+  avatar: string;
+  createdAt: string;
+}
+
+/** Response from GET /api/users/:id/stats */
+export interface UserStatsResponse {
+  userId: string;
+  nickname: string;
+  gamesPlayed: number;
+  gamesWon: number;
+  winRate: number;
+  currentStreak: number;
+  bestStreak: number;
+  avgTimeSeconds: number | null;
+  recentGames: RecentGame[];
+}
+
+export interface RecentGame {
+  date: string;
+  puzzleNumber: number;
+  correct: boolean;
+  attemptsUsed: number;
+  timeTakenSeconds: number | null;
+}
+
+/** Spotify-enhanced song search result */
+export interface SpotifySongResult {
+  title: string;
+  artist: string;
+  spotifyId: string | null;
+  albumArt: string | null;
+  previewUrl: string | null;
+}

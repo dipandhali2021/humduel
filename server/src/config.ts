@@ -21,5 +21,12 @@ export const DATABASE_PATH = process.env['DATABASE_PATH'] ?? path.resolve(__dirn
 export const UPLOAD_DIR = process.env['UPLOAD_DIR'] ?? path.resolve(__dirname, '../../uploads');
 export const CORS_ORIGIN = process.env['CORS_ORIGIN'] ?? 'http://localhost:5173';
 
+// Spotify API credentials (optional — falls back to local catalog if not set)
+export const SPOTIFY_CLIENT_ID = process.env['SPOTIFY_CLIENT_ID'] ?? '';
+export const SPOTIFY_CLIENT_SECRET = process.env['SPOTIFY_CLIENT_SECRET'] ?? '';
+
+// Daily puzzle epoch — puzzle #1 starts on this date
+export const DAILY_EPOCH = '2026-04-01';
+
 // Re-export requireEnv in case routes need it
 export { requireEnv };

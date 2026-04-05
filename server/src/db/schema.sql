@@ -28,21 +28,38 @@ CREATE TABLE IF NOT EXISTS daily_challenges (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   date TEXT NOT NULL UNIQUE,
   puzzle_number INTEGER NOT NULL,
-  audio_filename TEXT NOT NULL,
-  waveform_data TEXT NOT NULL,
   song_title TEXT NOT NULL,
   song_artist TEXT NOT NULL,
-  song_id TEXT
+  song_id TEXT,
+  spotify_preview_url TEXT,
+  spotify_album_art TEXT
+);
+
+CREATE TABLE IF NOT EXISTS daily_guesses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL,
+  user_id TEXT,
+  session_id TEXT NOT NULL,
+  guess_text TEXT NOT NULL,
+  correct INTEGER NOT NULL DEFAULT 0,
+  attempt_number INTEGER NOT NULL,
+  time_ms INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
-  username TEXT UNIQUE NOT NULL,
+  nickname TEXT UNIQUE NOT NULL,
+  avatar TEXT DEFAULT 'default',
   games_played INTEGER DEFAULT 0,
   games_won INTEGER DEFAULT 0,
   current_streak INTEGER DEFAULT 0,
   best_streak INTEGER DEFAULT 0,
+  last_played_date TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_guesses_session ON guesses(challenge_id, session_id);
+CREATE INDEX IF NOT EXISTS idx_daily_guesses_date ON daily_guesses(date, session_id);
+CREATE INDEX IF NOT EXISTS idx_daily_guesses_user ON daily_guesses(user_id, date);
+CREATE INDEX IF NOT EXISTS idx_daily_challenges_date ON daily_challenges(date);

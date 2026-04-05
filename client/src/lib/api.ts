@@ -3,6 +3,13 @@ import type {
   CreateChallengeResponse,
   GuessResponse,
   ChallengeResultResponse,
+  DailyChallengeResponse,
+  DailyGuessResponse,
+  DailyResultResponse,
+  LeaderboardResponse,
+  UserResponse,
+  UserStatsResponse,
+  SpotifySongResult,
 } from '@/types';
 
 // Trailing slash is intentionally omitted; all paths start with '/'.
@@ -123,4 +130,77 @@ export async function getChallengeResult(
 /** Verify that the API server is reachable and healthy. */
 export async function healthCheck(): Promise<{ status: string }> {
   return fetchJson<{ status: string }>(`${API_BASE}/health`);
+}
+
+// ─── Sprint 3: Daily Challenge API ──────────────────────────────────────────
+
+/** Fetch today's daily challenge. */
+export async function getDailyChallenge(sessionId: string): Promise<DailyChallengeResponse> {
+  const params = new URLSearchParams({ sessionId });
+  return fetchJson<DailyChallengeResponse>(`${API_BASE}/api/daily?${params.toString()}`);
+}
+
+/** Submit a guess for today's daily challenge. */
+export async function submitDailyGuess(
+  guess: string,
+  sessionId: string,
+  userId?: string,
+): Promise<DailyGuessResponse> {
+  return fetchJson<DailyGuessResponse>(`${API_BASE}/api/daily/guess`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ guess, sessionId, userId }),
+  });
+}
+
+/** Get the result for today's daily challenge. */
+export async function getDailyResult(sessionId: string): Promise<DailyResultResponse> {
+  const params = new URLSearchParams({ sessionId });
+  return fetchJson<DailyResultResponse>(`${API_BASE}/api/daily/result?${params.toString()}`);
+}
+
+// ─── Sprint 3: Leaderboard API ──────────────────────────────────────────────
+
+/** Fetch leaderboard for a given date (defaults to today). */
+export async function getLeaderboard(date?: string): Promise<LeaderboardResponse> {
+  const params = date ? new URLSearchParams({ date }) : new URLSearchParams();
+  return fetchJson<LeaderboardResponse>(`${API_BASE}/api/leaderboard?${params.toString()}`);
+}
+
+// ─── Sprint 3: User API ─────────────────────────────────────────────────────
+
+/** Create a new user with a nickname. */
+export async function createUser(nickname: string): Promise<UserResponse> {
+  return fetchJson<UserResponse>(`${API_BASE}/api/users`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nickname }),
+  });
+}
+
+/** Get a user by ID. */
+export async function getUser(userId: string): Promise<UserResponse> {
+  return fetchJson<UserResponse>(`${API_BASE}/api/users/${encodeURIComponent(userId)}`);
+}
+
+/** Update a user's nickname. */
+export async function updateUser(userId: string, nickname: string): Promise<UserResponse> {
+  return fetchJson<UserResponse>(`${API_BASE}/api/users/${encodeURIComponent(userId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nickname }),
+  });
+}
+
+/** Get user stats. */
+export async function getUserStats(userId: string): Promise<UserStatsResponse> {
+  return fetchJson<UserStatsResponse>(`${API_BASE}/api/users/${encodeURIComponent(userId)}/stats`);
+}
+
+// ─── Sprint 3: Song Search API ──────────────────────────────────────────────
+
+/** Search songs via Spotify API (falls back to local catalog). */
+export async function searchSongs(query: string): Promise<SpotifySongResult[]> {
+  const params = new URLSearchParams({ q: query });
+  return fetchJson<SpotifySongResult[]>(`${API_BASE}/api/songs/search?${params.toString()}`);
 }
