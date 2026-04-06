@@ -3,6 +3,11 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import fs from 'fs';
 
+// Check if HTTPS certs exist (for local dev with microphone)
+const keyPath = path.resolve(__dirname, 'localhost-key.pem');
+const certPath = path.resolve(__dirname, 'localhost-cert.pem');
+const hasHttpsCerts = fs.existsSync(keyPath) && fs.existsSync(certPath);
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -13,10 +18,14 @@ export default defineConfig({
   server: {
     port: 5173,
     host: '0.0.0.0',
-    https: {
-      key: fs.readFileSync(path.resolve(__dirname, 'localhost-key.pem')),
-      cert: fs.readFileSync(path.resolve(__dirname, 'localhost-cert.pem')),
-    },
+    ...(hasHttpsCerts
+      ? {
+          https: {
+            key: fs.readFileSync(keyPath),
+            cert: fs.readFileSync(certPath),
+          },
+        }
+      : {}),
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
