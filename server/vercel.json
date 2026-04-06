@@ -1,6 +1,10 @@
 {
   "version": 2,
-  "name": "humduel-api",
+  "functions": {
+    "api/**/*.js": {
+      "runtime": "@vercel/node@3"
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",
