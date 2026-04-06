@@ -6,6 +6,7 @@ import { PORT, CORS_ORIGIN, NODE_ENV, UPLOAD_DIR } from './config.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { ensureUploadDir } from './services/audioService.js';
+import { getDb, closeDb, isPostgres } from './database.js';
 
 // Route modules
 import healthRouter from './routes/health.js';
@@ -14,12 +15,6 @@ import dailyRouter from './routes/daily.js';
 import leaderboardRouter from './routes/leaderboard.js';
 import songsRouter from './routes/songs.js';
 import usersRouter from './routes/users.js';
-
-// Initialize database (runs schema migration on startup)
-import './database.js';
-
-// Ensure the uploads directory exists before handling any requests
-ensureUploadDir();
 
 const app = express();
 
@@ -57,27 +52,49 @@ app.use('/api/users', usersRouter);
 app.use(errorHandler);
 
 // --- Server startup ---
-const server = app.listen(PORT, () => {
-  console.log(`[HumDuel] Server running on port ${PORT} (${NODE_ENV})`);
-  console.log(`[HumDuel] Audio uploads served from ${UPLOAD_DIR} at /audio/`);
-});
+async function startServer() {
+  // Initialize database connection and schema
+  await getDb();
+  
+  // Ensure the uploads directory exists before handling any requests
+  ensureUploadDir();
 
-// --- Graceful shutdown ---
-function shutdown(signal: string) {
-  console.log(`\n[HumDuel] Received ${signal}. Shutting down gracefully...`);
-  server.close(() => {
-    console.log('[HumDuel] HTTP server closed.');
-    process.exit(0);
+  const server = app.listen(PORT, () => {
+    console.log(`[HumDuel] Server running on port ${PORT} (${NODE_ENV})`);
+    console.log(`[HumDuel] Database: ${isPostgres ? 'PostgreSQL' : 'SQLite'}`);
+    console.log(`[HumDuel] Audio uploads served from ${UPLOAD_DIR} at /audio/`);
   });
 
-  // Force exit after 10 seconds if connections linger
-  setTimeout(() => {
-    console.error('[HumDuel] Forced shutdown after timeout.');
-    process.exit(1);
-  }, 10_000).unref();
+  // --- Graceful shutdown ---
+  function shutdown(signal: string) {
+    console.log(`\n[HumDuel] Received ${signal}. Shutting down gracefully...`);
+    server.close(async () => {
+      console.log('[HumDuel] HTTP server closed.');
+      try {
+        await closeDb();
+        console.log('[HumDuel] Database connection closed.');
+      } catch (err) {
+        console.error('[HumDuel] Error closing database:', err);
+      }
+      process.exit(0);
+    });
+
+    // Force exit after 10 seconds if connections linger
+    setTimeout(() => {
+      console.error('[HumDuel] Forced shutdown after timeout.');
+      process.exit(1);
+    }, 10_000).unref();
+  }
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+
+  return server;
 }
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+startServer().catch((err) => {
+  console.error('[HumDuel] Failed to start server:', err);
+  process.exit(1);
+});
 
 export default app;

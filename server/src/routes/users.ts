@@ -19,7 +19,7 @@ const router = Router();
 // Returns: UserPublic (201)
 // ---------------------------------------------------------------------------
 
-router.post('/', (req: Request, res: Response, next: NextFunction): void => {
+router.post('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const body = req.body as Record<string, unknown>;
     const nickname = body['nickname'];
@@ -31,7 +31,7 @@ router.post('/', (req: Request, res: Response, next: NextFunction): void => {
       return;
     }
 
-    const user = createUser(nickname);
+    const user = await createUser(nickname);
     res.status(201).json(toUserPublic(user));
   } catch (err) {
     next(err);
@@ -44,10 +44,10 @@ router.post('/', (req: Request, res: Response, next: NextFunction): void => {
 // Returns: UserPublic (200) or 404
 // ---------------------------------------------------------------------------
 
-router.get('/:id', (req: Request, res: Response, next: NextFunction): void => {
+router.get('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params as { id: string };
-    const user = getUser(id);
+    const user = await getUser(id);
 
     if (!user) {
       const err: AppError = new Error('User not found');
@@ -70,7 +70,7 @@ router.get('/:id', (req: Request, res: Response, next: NextFunction): void => {
 // Returns: UserPublic (200)
 // ---------------------------------------------------------------------------
 
-router.put('/:id', (req: Request, res: Response, next: NextFunction): void => {
+router.put('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params as { id: string };
     const body = req.body as Record<string, unknown>;
@@ -88,7 +88,7 @@ router.put('/:id', (req: Request, res: Response, next: NextFunction): void => {
       return;
     }
 
-    const user = updateUser(id, { nickname, avatar });
+    const user = await updateUser(id, { nickname, avatar });
     res.json(toUserPublic(user));
   } catch (err) {
     next(err);
@@ -101,10 +101,10 @@ router.put('/:id', (req: Request, res: Response, next: NextFunction): void => {
 // Returns: UserStatsResult (200) or 404
 // ---------------------------------------------------------------------------
 
-router.get('/:id/stats', (req: Request, res: Response, next: NextFunction): void => {
+router.get('/:id/stats', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params as { id: string };
-    const stats = getUserStats(id);
+    const stats = await getUserStats(id);
 
     if (!stats) {
       const err: AppError = new Error('User not found');

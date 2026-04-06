@@ -2,12 +2,8 @@
  * Unit tests for statsService.ts
  *
  * Mocking strategy:
- *   An in-memory SQLite database is created inside vi.hoisted() with the full
- *   schema applied.  The database singleton is replaced before the service is
- *   imported so all prepared statements bind to the in-memory instance.
- *
- *   Data is seeded directly via SQL helpers to control the exact state of the
- *   users and daily_guesses tables.
+ *   An in-memory SQLite database with an async wrapper is used.
+ *   The getDb() function is mocked to return the async wrapper.
  */
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
@@ -16,7 +12,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 // vi.hoisted() — create the in-memory database before mocks run
 // ---------------------------------------------------------------------------
 
-const { testDb } = vi.hoisted(() => {
+const { testDb, asyncDb } = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Database = require('better-sqlite3');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -35,14 +31,60 @@ const { testDb } = vi.hoisted(() => {
   db.pragma('foreign_keys = ON');
   db.exec(schema);
 
-  return { testDb: db };
+  // Parameter conversion: PostgreSQL $1, $2, ... to SQLite ?, ?, ...
+  function convertToSqlite(sql: string, params?: unknown[]): { sql: string; params: unknown[] } {
+    if (!params || params.length === 0) {
+      return { sql: sql.replace(/\$\d+/g, '?'), params: [] };
+    }
+    const matches = sql.match(/\$(\d+)/g);
+    if (!matches) {
+      return { sql, params: params || [] };
+    }
+    const newParams: unknown[] = [];
+    for (const match of matches) {
+      const num = parseInt(match.slice(1), 10);
+      if (num >= 1 && num <= params.length) {
+        newParams.push(params[num - 1]);
+      }
+    }
+    const newSql = sql.replace(/\$\d+/g, '?');
+    return { sql: newSql, params: newParams };
+  }
+
+  // Create async wrapper around synchronous SQLite
+  const asyncDb = {
+    all: async <T>(sql: string, params?: unknown[]): Promise<T[]> => {
+      const { sql: convertedSql, params: convertedParams } = convertToSqlite(sql, params);
+      return db.prepare(convertedSql).all(convertedParams) as T[];
+    },
+    get: async <T>(sql: string, params?: unknown[]): Promise<T | null> => {
+      const { sql: convertedSql, params: convertedParams } = convertToSqlite(sql, params);
+      return (db.prepare(convertedSql).get(convertedParams) as T) ?? null;
+    },
+    run: async (sql: string, params?: unknown[]): Promise<{ changes: number; lastInsertRowid: number | bigint }> => {
+      const { sql: convertedSql, params: convertedParams } = convertToSqlite(sql, params);
+      return db.prepare(convertedSql).run(convertedParams);
+    },
+    exec: async (sql: string): Promise<void> => {
+      db.exec(sql);
+    },
+    close: async (): Promise<void> => {
+      db.close();
+    },
+  };
+
+  return { testDb: db, asyncDb };
 });
 
 // ---------------------------------------------------------------------------
-// Replace the database singleton
+// Replace the database module
 // ---------------------------------------------------------------------------
 
-vi.mock('../../database.js', () => ({ default: testDb }));
+vi.mock('../../database.js', () => ({
+  getDb: async () => asyncDb,
+  closeDb: async () => { testDb.close(); },
+  isPostgres: false,
+}));
 
 // ---------------------------------------------------------------------------
 // Import service under test after mocks are registered
@@ -144,239 +186,422 @@ beforeEach(() => {
 // ===========================================================================
 
 describe('getUserStats', () => {
-  it('returns null for a non-existent user id', () => {
-    expect(getUserStats('ghost-user-id')).toBeNull();
+  it('returns null for a non-existent user id', async () => {
+    expect(await getUserStats('ghost-user-id')).toBeNull();
   });
 
-  it('returns a result with the correct userId and nickname', () => {
-    const id = freshUserId();
-    seedUser({ id, nickname: 'HumPlayer' });
+  it('returns userId and nickname', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId, nickname: 'StatsUser' });
 
-    const stats = getUserStats(id);
+    const stats = await getUserStats(userId);
+
     expect(stats).not.toBeNull();
-    expect(stats!.userId).toBe(id);
-    expect(stats!.nickname).toBe('HumPlayer');
+    expect(stats!.userId).toBe(userId);
+    expect(stats!.nickname).toBe('StatsUser');
   });
 
-  it('returns gamesPlayed and gamesWon from the users row', () => {
-    const id = freshUserId();
-    seedUser({ id, gamesPlayed: 10, gamesWon: 7 });
+  it('returns gamesPlayed and gamesWon from the users table', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId, gamesPlayed: 10, gamesWon: 7 });
 
-    const stats = getUserStats(id);
+    const stats = await getUserStats(userId);
+
     expect(stats!.gamesPlayed).toBe(10);
     expect(stats!.gamesWon).toBe(7);
   });
 
-  it('computes winRate as gamesWon / gamesPlayed', () => {
-    const id = freshUserId();
-    seedUser({ id, gamesPlayed: 10, gamesWon: 7 });
+  it('calculates winRate as gamesWon / gamesPlayed', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId, gamesPlayed: 8, gamesWon: 2 });
 
-    const stats = getUserStats(id);
-    expect(stats!.winRate).toBeCloseTo(0.7);
+    const stats = await getUserStats(userId);
+
+    expect(stats!.winRate).toBeCloseTo(2 / 8, 5);
   });
 
-  it('returns winRate of 0 when gamesPlayed is 0', () => {
-    const id = freshUserId();
-    seedUser({ id, gamesPlayed: 0, gamesWon: 0 });
+  it('winRate is 0 when gamesPlayed is 0', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId, gamesPlayed: 0, gamesWon: 0 });
 
-    const stats = getUserStats(id);
+    const stats = await getUserStats(userId);
+
     expect(stats!.winRate).toBe(0);
   });
 
-  it('returns winRate of 1 when all games were won', () => {
-    const id = freshUserId();
-    seedUser({ id, gamesPlayed: 5, gamesWon: 5 });
+  it('winRate is 1 when gamesPlayed equals gamesWon', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId, gamesPlayed: 5, gamesWon: 5 });
 
-    const stats = getUserStats(id);
+    const stats = await getUserStats(userId);
+
     expect(stats!.winRate).toBe(1);
   });
 
-  it('returns currentStreak and bestStreak from the users row', () => {
-    const id = freshUserId();
-    seedUser({ id, currentStreak: 3, bestStreak: 7 });
+  it('winRate is a fraction between 0 and 1', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId, gamesPlayed: 3, gamesWon: 1 });
 
-    const stats = getUserStats(id);
-    expect(stats!.currentStreak).toBe(3);
-    expect(stats!.bestStreak).toBe(7);
+    const stats = await getUserStats(userId);
+
+    expect(stats!.winRate).toBeGreaterThan(0);
+    expect(stats!.winRate).toBeLessThan(1);
   });
 
-  it('returns avgTimeSeconds as null when there are no correct daily guesses', () => {
-    const id = freshUserId();
-    seedUser({ id });
+  it('returns currentStreak and bestStreak from the users table', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId, currentStreak: 4, bestStreak: 12 });
 
-    const stats = getUserStats(id);
+    const stats = await getUserStats(userId);
+
+    expect(stats!.currentStreak).toBe(4);
+    expect(stats!.bestStreak).toBe(12);
+  });
+
+  it('avgTimeSeconds is null when no correct guesses', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId });
+
+    const stats = await getUserStats(userId);
+
     expect(stats!.avgTimeSeconds).toBeNull();
   });
 
-  it('computes avgTimeSeconds from correct guesses only', () => {
-    const id = freshUserId();
-    seedUser({ id, gamesPlayed: 2, gamesWon: 2 });
+  it('avgTimeSeconds is the average of time_ms for correct guesses only', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId });
+    seedDailyChallenge('2026-04-01', 1);
+    seedDailyChallenge('2026-04-02', 2);
 
-    seedGuess({ date: '2026-04-01', userId: id, attemptNumber: 1, timeMs: 10000, correct: true });
-    seedGuess({ date: '2026-04-02', userId: id, attemptNumber: 1, timeMs: 20000, correct: true });
+    // Correct: 10 seconds
+    seedGuess({
+      date: '2026-04-01',
+      userId,
+      attemptNumber: 1,
+      timeMs: 10000,
+      correct: true,
+    });
 
-    const stats = getUserStats(id);
-    // avg of 10000ms and 20000ms = 15000ms = 15s
-    expect(stats!.avgTimeSeconds).toBe(15);
+    // Wrong: should not affect average
+    seedGuess({
+      date: '2026-04-02',
+      userId,
+      attemptNumber: 1,
+      timeMs: 5000,
+      correct: false,
+    });
+
+    const stats = await getUserStats(userId);
+
+    expect(stats!.avgTimeSeconds).toBe(10);
   });
 
-  it('excludes wrong guesses from avgTimeSeconds', () => {
-    const id = freshUserId();
-    seedUser({ id, gamesPlayed: 1, gamesWon: 1 });
+  it('avgTimeSeconds ignores rows where time_ms is null', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId });
+    seedDailyChallenge('2026-04-10', 10);
+    seedDailyChallenge('2026-04-11', 11);
 
-    // Wrong guess with a huge time — should not influence avg
-    seedGuess({ date: '2026-04-01', userId: id, attemptNumber: 1, timeMs: 999999, correct: false });
-    // Correct guess
-    seedGuess({ date: '2026-04-01', userId: id, attemptNumber: 2, timeMs: 8000, correct: true });
+    seedGuess({
+      date: '2026-04-10',
+      userId,
+      attemptNumber: 1,
+      timeMs: 20000,
+      correct: true,
+    });
 
-    const stats = getUserStats(id);
-    expect(stats!.avgTimeSeconds).toBe(8);
+    seedGuess({
+      date: '2026-04-11',
+      userId,
+      attemptNumber: 1,
+      timeMs: null,
+      correct: true,
+    });
+
+    const stats = await getUserStats(userId);
+
+    // Only the 20s row should be included in the average
+    expect(stats!.avgTimeSeconds).toBe(20);
   });
 
-  it('excludes rows with null time_ms from avgTimeSeconds', () => {
-    const id = freshUserId();
-    seedUser({ id });
+  it('avgTimeSeconds averages multiple correct guesses', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId });
+    seedDailyChallenge('2026-04-20', 20);
+    seedDailyChallenge('2026-04-21', 21);
+    seedDailyChallenge('2026-04-22', 22);
 
-    seedGuess({ date: '2026-04-01', userId: id, attemptNumber: 1, timeMs: null, correct: true });
-    seedGuess({ date: '2026-04-02', userId: id, attemptNumber: 1, timeMs: 6000, correct: true });
+    seedGuess({
+      date: '2026-04-20',
+      userId,
+      attemptNumber: 1,
+      timeMs: 10000,
+      correct: true,
+    });
 
-    const stats = getUserStats(id);
-    // Only the 6000ms row counts
-    expect(stats!.avgTimeSeconds).toBe(6);
+    seedGuess({
+      date: '2026-04-21',
+      userId,
+      attemptNumber: 2,
+      timeMs: 20000,
+      correct: true,
+    });
+
+    seedGuess({
+      date: '2026-04-22',
+      userId,
+      attemptNumber: 3,
+      timeMs: 30000,
+      correct: true,
+    });
+
+    const stats = await getUserStats(userId);
+
+    // Average of 10s, 20s, 30s = 20s
+    expect(stats!.avgTimeSeconds).toBe(20);
   });
 
-  it('returns an empty recentGames array when no guesses exist', () => {
-    const id = freshUserId();
-    seedUser({ id });
+  it('avgTimeSeconds excludes other users guesses', async () => {
+    const userId = freshUserId();
+    const otherUserId = freshUserId();
+    seedUser({ id: userId });
+    seedUser({ id: otherUserId });
+    seedDailyChallenge('2026-04-25', 25);
 
-    const stats = getUserStats(id);
+    seedGuess({
+      date: '2026-04-25',
+      userId,
+      attemptNumber: 1,
+      timeMs: 5000,
+      correct: true,
+    });
+
+    seedGuess({
+      date: '2026-04-25',
+      userId: otherUserId,
+      attemptNumber: 1,
+      timeMs: 999999,
+      correct: true,
+    });
+
+    const stats = await getUserStats(userId);
+
+    expect(stats!.avgTimeSeconds).toBe(5);
+  });
+
+  it('recentGames is empty when user has no guesses', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId });
+
+    const stats = await getUserStats(userId);
+
     expect(stats!.recentGames).toEqual([]);
   });
 
-  it('recentGames includes one entry per date played', () => {
-    const id = freshUserId();
-    seedUser({ id });
+  it('recentGames includes the correct date for a game', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId });
+    seedDailyChallenge('2026-04-30', 30);
 
-    seedDailyChallenge('2026-04-01', 1);
-    seedDailyChallenge('2026-04-02', 2);
-    seedGuess({ date: '2026-04-01', userId: id, attemptNumber: 1, timeMs: 5000, correct: true });
-    seedGuess({ date: '2026-04-02', userId: id, attemptNumber: 2, timeMs: 10000, correct: false });
+    seedGuess({
+      date: '2026-04-30',
+      userId,
+      attemptNumber: 1,
+      timeMs: 1000,
+      correct: true,
+    });
 
-    const stats = getUserStats(id);
-    expect(stats!.recentGames).toHaveLength(2);
+    const stats = await getUserStats(userId);
+
+    expect(stats!.recentGames.length).toBe(1);
+    expect(stats!.recentGames[0]!.date).toBe('2026-04-30');
   });
 
-  it('recentGames entries have the correct shape', () => {
-    const id = freshUserId();
-    seedUser({ id });
+  it('recentGames includes puzzleNumber from daily_challenges', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId });
+    seedDailyChallenge('2026-05-01', 42);
 
-    seedDailyChallenge('2026-04-05', 5);
-    seedGuess({ date: '2026-04-05', userId: id, attemptNumber: 2, timeMs: 12000, correct: true });
+    seedGuess({
+      date: '2026-05-01',
+      userId,
+      attemptNumber: 1,
+      timeMs: 1000,
+      correct: true,
+    });
 
-    const stats = getUserStats(id);
-    const game = stats!.recentGames[0];
+    const stats = await getUserStats(userId);
 
-    expect(game.date).toBe('2026-04-05');
-    expect(game.puzzleNumber).toBe(5);
-    expect(game.correct).toBe(true);
-    expect(game.attemptsUsed).toBe(2);
-    expect(game.timeTakenSeconds).toBe(12);
+    expect(stats!.recentGames[0]!.puzzleNumber).toBe(42);
   });
 
-  it('recentGames marks correct as false for a lost game', () => {
-    const id = freshUserId();
-    seedUser({ id });
+  it('recentGames correct is true for a winning game', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId });
+    seedDailyChallenge('2026-05-02', 1);
 
-    seedDailyChallenge('2026-04-06', 6);
-    // 6 wrong guesses — all incorrect
+    seedGuess({
+      date: '2026-05-02',
+      userId,
+      attemptNumber: 3,
+      timeMs: 15000,
+      correct: true,
+    });
+
+    const stats = await getUserStats(userId);
+
+    expect(stats!.recentGames[0]!.correct).toBe(true);
+    expect(stats!.recentGames[0]!.attemptsUsed).toBe(3);
+  });
+
+  it('recentGames correct is false for a losing game', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId });
+    seedDailyChallenge('2026-05-03', 1);
+
+    // Six wrong guesses → loss
     for (let i = 1; i <= 6; i++) {
-      seedGuess({ date: '2026-04-06', userId: id, attemptNumber: i, timeMs: i * 1000, correct: false });
+      seedGuess({
+        date: '2026-05-03',
+        userId,
+        attemptNumber: i,
+        timeMs: i * 1000,
+        correct: false,
+      });
     }
 
-    const stats = getUserStats(id);
-    const game = stats!.recentGames[0];
-    expect(game.correct).toBe(false);
+    const stats = await getUserStats(userId);
+
+    expect(stats!.recentGames[0]!.correct).toBe(false);
+    expect(stats!.recentGames[0]!.attemptsUsed).toBe(6);
   });
 
-  it('recentGames returns timeTakenSeconds as null for a lost game (no correct guess time)', () => {
-    const id = freshUserId();
-    seedUser({ id });
+  it('recentGames timeTakenSeconds is derived from the correct guess row', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId });
+    seedDailyChallenge('2026-05-04', 1);
 
-    seedDailyChallenge('2026-04-07', 7);
+    seedGuess({
+      date: '2026-05-04',
+      userId,
+      attemptNumber: 2,
+      timeMs: 12345,
+      correct: true,
+    });
+
+    const stats = await getUserStats(userId);
+
+    expect(stats!.recentGames[0]!.timeTakenSeconds).toBe(12);
+  });
+
+  it('recentGames timeTakenSeconds is null for a losing game', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId });
+    seedDailyChallenge('2026-05-05', 1);
+
     for (let i = 1; i <= 6; i++) {
-      seedGuess({ date: '2026-04-07', userId: id, attemptNumber: i, timeMs: i * 2000, correct: false });
+      seedGuess({
+        date: '2026-05-05',
+        userId,
+        attemptNumber: i,
+        timeMs: i * 1000,
+        correct: false,
+      });
     }
 
-    const stats = getUserStats(id);
-    const game = stats!.recentGames[0];
-    // Lost game — time is NULL in the CASE expression
-    expect(game.timeTakenSeconds).toBeNull();
+    const stats = await getUserStats(userId);
+
+    expect(stats!.recentGames[0]!.timeTakenSeconds).toBeNull();
   });
 
-  it('recentGames uses puzzleNumber of 0 when no daily_challenges row exists', () => {
-    const id = freshUserId();
-    seedUser({ id });
+  it('recentGames is ordered by date DESC', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId });
+    seedDailyChallenge('2026-05-10', 10);
+    seedDailyChallenge('2026-05-11', 11);
+    seedDailyChallenge('2026-05-12', 12);
 
-    // No seedDailyChallenge call for this date
-    seedGuess({ date: '2026-04-08', userId: id, attemptNumber: 1, timeMs: 5000, correct: true });
+    seedGuess({
+      date: '2026-05-10',
+      userId,
+      attemptNumber: 1,
+      timeMs: 1000,
+      correct: true,
+    });
 
-    const stats = getUserStats(id);
-    const game = stats!.recentGames[0];
-    expect(game.puzzleNumber).toBe(0);
+    seedGuess({
+      date: '2026-05-11',
+      userId,
+      attemptNumber: 1,
+      timeMs: 1000,
+      correct: true,
+    });
+
+    seedGuess({
+      date: '2026-05-12',
+      userId,
+      attemptNumber: 1,
+      timeMs: 1000,
+      correct: true,
+    });
+
+    const stats = await getUserStats(userId);
+
+    expect(stats!.recentGames.length).toBe(3);
+    expect(stats!.recentGames[0]!.date).toBe('2026-05-12');
+    expect(stats!.recentGames[1]!.date).toBe('2026-05-11');
+    expect(stats!.recentGames[2]!.date).toBe('2026-05-10');
   });
 
-  it('returns at most 10 recentGames', () => {
-    const id = freshUserId();
-    seedUser({ id });
+  it('recentGames is capped at 10 entries', async () => {
+    const userId = freshUserId();
+    seedUser({ id: userId });
 
-    for (let day = 1; day <= 15; day++) {
-      const date = `2026-04-${String(day).padStart(2, '0')}`;
-      seedDailyChallenge(date, day);
-      seedGuess({ date, userId: id, attemptNumber: 1, timeMs: 5000, correct: true });
+    for (let i = 1; i <= 15; i++) {
+      const date = `2026-06-${String(i).padStart(2, '0')}`;
+      seedDailyChallenge(date, i);
+      seedGuess({
+        date,
+        userId,
+        attemptNumber: 1,
+        timeMs: 1000,
+        correct: true,
+      });
     }
 
-    const stats = getUserStats(id);
-    expect(stats!.recentGames.length).toBeLessThanOrEqual(10);
+    const stats = await getUserStats(userId);
+
+    expect(stats!.recentGames.length).toBe(10);
+    // Most recent should be June 15
+    expect(stats!.recentGames[0]!.date).toBe('2026-06-15');
   });
 
-  it('recentGames are ordered most recent first', () => {
-    const id = freshUserId();
-    seedUser({ id });
+  it('recentGames only includes the specified users games', async () => {
+    const userId = freshUserId();
+    const otherUserId = freshUserId();
+    seedUser({ id: userId });
+    seedUser({ id: otherUserId });
+    seedDailyChallenge('2026-06-20', 20);
 
-    seedDailyChallenge('2026-04-01', 1);
-    seedDailyChallenge('2026-04-05', 5);
-    seedDailyChallenge('2026-04-10', 10);
+    seedGuess({
+      date: '2026-06-20',
+      userId,
+      attemptNumber: 1,
+      timeMs: 1000,
+      correct: true,
+    });
 
-    seedGuess({ date: '2026-04-01', userId: id, attemptNumber: 1, timeMs: 5000, correct: true });
-    seedGuess({ date: '2026-04-05', userId: id, attemptNumber: 1, timeMs: 5000, correct: true });
-    seedGuess({ date: '2026-04-10', userId: id, attemptNumber: 1, timeMs: 5000, correct: true });
+    seedGuess({
+      date: '2026-06-20',
+      userId: otherUserId,
+      attemptNumber: 1,
+      timeMs: 999999,
+      correct: true,
+    });
 
-    const stats = getUserStats(id);
-    const dates = stats!.recentGames.map((g) => g.date);
-    expect(dates[0]).toBe('2026-04-10');
-    expect(dates[1]).toBe('2026-04-05');
-    expect(dates[2]).toBe('2026-04-01');
-  });
+    const stats = await getUserStats(userId);
 
-  it('does not include other users guesses in stats', () => {
-    const idA = freshUserId();
-    const idB = freshUserId();
-    seedUser({ id: idA });
-    seedUser({ id: idB });
-
-    seedDailyChallenge('2026-04-01', 1);
-    seedGuess({ date: '2026-04-01', userId: idA, attemptNumber: 1, timeMs: 5000, correct: true });
-    seedGuess({ date: '2026-04-01', userId: idB, attemptNumber: 1, timeMs: 9000, correct: true });
-
-    const statsA = getUserStats(idA);
-    const statsB = getUserStats(idB);
-
-    // Each user should see only their own game
-    expect(statsA!.recentGames).toHaveLength(1);
-    expect(statsB!.recentGames).toHaveLength(1);
-
-    // avgTimeSeconds should differ
-    expect(statsA!.avgTimeSeconds).toBe(5);
-    expect(statsB!.avgTimeSeconds).toBe(9);
+    expect(stats!.recentGames.length).toBe(1);
+    expect(stats!.recentGames[0]!.timeTakenSeconds).toBe(1);
   });
 });

@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import db from '../database.js';
+import { getDb } from '../database.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -226,59 +226,6 @@ function buildShareText(
 }
 
 // ---------------------------------------------------------------------------
-// Database prepared statements
-// ---------------------------------------------------------------------------
-
-const stmtInsertChallenge = db.prepare<{
-  id: string;
-  creator_name: string;
-  audio_filename: string;
-  waveform_data: string;
-  song_title: string;
-  song_artist: string;
-  song_id: string | null;
-  duration_seconds: number;
-  created_at: string;
-  expires_at: string;
-}>(`
-  INSERT INTO challenges
-    (id, creator_name, audio_filename, waveform_data, song_title, song_artist, song_id, duration_seconds, created_at, expires_at)
-  VALUES
-    (@id, @creator_name, @audio_filename, @waveform_data, @song_title, @song_artist, @song_id, @duration_seconds, @created_at, @expires_at)
-`);
-
-const stmtSelectChallenge = db.prepare<[string]>('SELECT * FROM challenges WHERE id = ?');
-
-const stmtCountGuesses = db.prepare<[string]>(
-  'SELECT COUNT(*) AS cnt FROM guesses WHERE challenge_id = ?',
-);
-
-const stmtCountCompletions = db.prepare<[string]>(
-  'SELECT COUNT(DISTINCT session_id) AS cnt FROM guesses WHERE challenge_id = ? AND correct = 1 AND session_id IS NOT NULL',
-);
-
-const stmtGetSessionGuesses = db.prepare<[string, string]>(
-  'SELECT * FROM guesses WHERE challenge_id = ? AND session_id = ? ORDER BY attempt_number ASC',
-);
-
-const stmtInsertGuess = db.prepare<{
-  challenge_id: string;
-  guesser_name: string | null;
-  song_title: string;
-  song_artist: string;
-  correct: number;
-  attempt_number: number;
-  time_ms: number | null;
-  session_id: string;
-  created_at: string;
-}>(`
-  INSERT INTO guesses
-    (challenge_id, guesser_name, song_title, song_artist, correct, attempt_number, time_ms, session_id, created_at)
-  VALUES
-    (@challenge_id, @guesser_name, @song_title, @song_artist, @correct, @attempt_number, @time_ms, @session_id, @created_at)
-`);
-
-// ---------------------------------------------------------------------------
 // Service functions
 // ---------------------------------------------------------------------------
 
@@ -286,25 +233,32 @@ const stmtInsertGuess = db.prepare<{
  * Insert a challenge row using a caller-supplied id.
  * The id must already be unique and used to name the audio file.
  */
-export function createChallengeWithId(
+export async function createChallengeWithId(
   id: string,
   data: CreateChallengeData,
-): CreatedChallenge {
+): Promise<CreatedChallenge> {
+  const db = await getDb();
   const now = nowIso();
   const expires = expiryIso();
 
-  stmtInsertChallenge.run({
-    id,
-    creator_name: data.creatorAlias?.trim() || 'Anonymous',
-    audio_filename: data.audioFilename,
-    waveform_data: JSON.stringify(data.waveformData),
-    song_title: data.songTitle.trim(),
-    song_artist: data.songArtist.trim(),
-    song_id: data.songId ?? null,
-    duration_seconds: data.durationSeconds,
-    created_at: now,
-    expires_at: expires,
-  });
+  await db.run(
+    `INSERT INTO challenges
+      (id, creator_name, audio_filename, waveform_data, song_title, song_artist, song_id, duration_seconds, created_at, expires_at)
+    VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [
+      id,
+      data.creatorAlias?.trim() || 'Anonymous',
+      data.audioFilename,
+      JSON.stringify(data.waveformData),
+      data.songTitle.trim(),
+      data.songArtist.trim(),
+      data.songId ?? null,
+      data.durationSeconds,
+      now,
+      expires,
+    ]
+  );
 
   return {
     id,
@@ -318,7 +272,7 @@ export function createChallengeWithId(
  * Insert a challenge row, generating a new 8-char nanoid.
  * Convenience wrapper around createChallengeWithId.
  */
-export function createChallenge(data: CreateChallengeData): CreatedChallenge {
+export async function createChallenge(data: CreateChallengeData): Promise<CreatedChallenge> {
   return createChallengeWithId(nanoid(8), data);
 }
 
@@ -326,12 +280,19 @@ export function createChallenge(data: CreateChallengeData): CreatedChallenge {
  * Retrieve a challenge without revealing the song answer.
  * Returns null if not found.
  */
-export function getChallenge(id: string): ChallengePublic | null {
-  const row = stmtSelectChallenge.get(id) as ChallengeRow | undefined;
+export async function getChallenge(id: string): Promise<ChallengePublic | null> {
+  const db = await getDb();
+  const row = await db.get<ChallengeRow>('SELECT * FROM challenges WHERE id = $1', [id]);
   if (!row) return null;
 
-  const guessCountRow = stmtCountGuesses.get(row.id) as { cnt: number };
-  const completionCountRow = stmtCountCompletions.get(row.id) as { cnt: number };
+  const guessCountRow = await db.get<{ cnt: string }>(
+    'SELECT COUNT(*) AS cnt FROM guesses WHERE challenge_id = $1',
+    [row.id]
+  );
+  const completionCountRow = await db.get<{ cnt: string }>(
+    'SELECT COUNT(DISTINCT session_id) AS cnt FROM guesses WHERE challenge_id = $1 AND correct = 1 AND session_id IS NOT NULL',
+    [row.id]
+  );
 
   return {
     id: row.id,
@@ -339,8 +300,8 @@ export function getChallenge(id: string): ChallengePublic | null {
     waveformData: JSON.parse(row.waveform_data) as number[],
     durationSeconds: row.duration_seconds,
     creatorAlias: row.creator_name,
-    guessCount: guessCountRow.cnt,
-    completionCount: completionCountRow.cnt,
+    guessCount: parseInt(guessCountRow?.cnt ?? '0', 10),
+    completionCount: parseInt(completionCountRow?.cnt ?? '0', 10),
     maxAttempts: MAX_ATTEMPTS,
     expiresAt: row.expires_at,
     createdAt: row.created_at,
@@ -356,12 +317,13 @@ export function getChallenge(id: string): ChallengePublic | null {
  *
  * Throws an operational AppError for 404, 409, 410 cases.
  */
-export function submitGuess(
+export async function submitGuess(
   challengeId: string,
   guessText: string,
   sessionId?: string,
-): SubmitGuessResult {
-  const row = stmtSelectChallenge.get(challengeId) as ChallengeRow | undefined;
+): Promise<SubmitGuessResult> {
+  const db = await getDb();
+  const row = await db.get<ChallengeRow>('SELECT * FROM challenges WHERE id = $1', [challengeId]);
 
   if (!row) {
     const err = new Error('Challenge not found') as Error & {
@@ -386,10 +348,10 @@ export function submitGuess(
   // Ensure we have a sessionId to track attempts
   const resolvedSessionId = sessionId?.trim() || nanoid(16);
 
-  const previousGuesses = stmtGetSessionGuesses.all(
-    challengeId,
-    resolvedSessionId,
-  ) as GuessRow[];
+  const previousGuesses = await db.all<GuessRow>(
+    'SELECT * FROM guesses WHERE challenge_id = $1 AND session_id = $2 ORDER BY attempt_number ASC',
+    [challengeId, resolvedSessionId]
+  );
 
   // Check if session is already finished
   const alreadyCorrect = previousGuesses.some((g) => g.correct === 1);
@@ -418,17 +380,23 @@ export function submitGuess(
     timeTakenMs = Date.now() - firstAt;
   }
 
-  stmtInsertGuess.run({
-    challenge_id: challengeId,
-    guesser_name: null,
-    song_title: guessText.trim(),
-    song_artist: '',
-    correct: correct ? 1 : 0,
-    attempt_number: attemptNumber,
-    time_ms: timeTakenMs,
-    session_id: resolvedSessionId,
-    created_at: now,
-  });
+  await db.run(
+    `INSERT INTO guesses
+      (challenge_id, guesser_name, song_title, song_artist, correct, attempt_number, time_ms, session_id, created_at)
+    VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [
+      challengeId,
+      null,
+      guessText.trim(),
+      '',
+      correct ? 1 : 0,
+      attemptNumber,
+      timeTakenMs,
+      resolvedSessionId,
+      now,
+    ]
+  );
 
   const attemptsUsed = attemptNumber;
   const attemptsRemaining = MAX_ATTEMPTS - attemptsUsed;
@@ -455,14 +423,18 @@ export function submitGuess(
  * Return the complete result for a finished session including share text.
  * Returns null if the challenge or session does not exist / has no guesses.
  */
-export function getResult(
+export async function getResult(
   challengeId: string,
   sessionId: string,
-): ChallengeResult | null {
-  const row = stmtSelectChallenge.get(challengeId) as ChallengeRow | undefined;
+): Promise<ChallengeResult | null> {
+  const db = await getDb();
+  const row = await db.get<ChallengeRow>('SELECT * FROM challenges WHERE id = $1', [challengeId]);
   if (!row) return null;
 
-  const guesses = stmtGetSessionGuesses.all(challengeId, sessionId) as GuessRow[];
+  const guesses = await db.all<GuessRow>(
+    'SELECT * FROM guesses WHERE challenge_id = $1 AND session_id = $2 ORDER BY attempt_number ASC',
+    [challengeId, sessionId]
+  );
   if (guesses.length === 0) return null;
 
   const won = guesses.some((g) => g.correct === 1);

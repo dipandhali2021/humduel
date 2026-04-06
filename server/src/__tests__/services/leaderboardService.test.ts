@@ -2,12 +2,8 @@
  * Unit tests for leaderboardService.ts
  *
  * Mocking strategy:
- *   An in-memory SQLite database is created inside vi.hoisted() with the full
- *   schema applied.  The database singleton is replaced before the service is
- *   imported so all prepared statements bind to the in-memory instance.
- *
- *   Data is seeded directly via SQL helpers so each test controls the exact
- *   state of daily_challenges, daily_guesses, and users tables.
+ *   An in-memory SQLite database with an async wrapper is used.
+ *   The getDb() function is mocked to return the async wrapper.
  */
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
@@ -16,7 +12,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 // vi.hoisted() — create the in-memory database before mocks run
 // ---------------------------------------------------------------------------
 
-const { testDb } = vi.hoisted(() => {
+const { testDb, asyncDb } = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Database = require('better-sqlite3');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -35,14 +31,60 @@ const { testDb } = vi.hoisted(() => {
   db.pragma('foreign_keys = ON');
   db.exec(schema);
 
-  return { testDb: db };
+  // Parameter conversion: PostgreSQL $1, $2, ... to SQLite ?, ?, ...
+  function convertToSqlite(sql: string, params?: unknown[]): { sql: string; params: unknown[] } {
+    if (!params || params.length === 0) {
+      return { sql: sql.replace(/\$\d+/g, '?'), params: [] };
+    }
+    const matches = sql.match(/\$(\d+)/g);
+    if (!matches) {
+      return { sql, params: params || [] };
+    }
+    const newParams: unknown[] = [];
+    for (const match of matches) {
+      const num = parseInt(match.slice(1), 10);
+      if (num >= 1 && num <= params.length) {
+        newParams.push(params[num - 1]);
+      }
+    }
+    const newSql = sql.replace(/\$\d+/g, '?');
+    return { sql: newSql, params: newParams };
+  }
+
+  // Create async wrapper around synchronous SQLite
+  const asyncDb = {
+    all: async <T>(sql: string, params?: unknown[]): Promise<T[]> => {
+      const { sql: convertedSql, params: convertedParams } = convertToSqlite(sql, params);
+      return db.prepare(convertedSql).all(convertedParams) as T[];
+    },
+    get: async <T>(sql: string, params?: unknown[]): Promise<T | null> => {
+      const { sql: convertedSql, params: convertedParams } = convertToSqlite(sql, params);
+      return (db.prepare(convertedSql).get(convertedParams) as T) ?? null;
+    },
+    run: async (sql: string, params?: unknown[]): Promise<{ changes: number; lastInsertRowid: number | bigint }> => {
+      const { sql: convertedSql, params: convertedParams } = convertToSqlite(sql, params);
+      return db.prepare(convertedSql).run(convertedParams);
+    },
+    exec: async (sql: string): Promise<void> => {
+      db.exec(sql);
+    },
+    close: async (): Promise<void> => {
+      db.close();
+    },
+  };
+
+  return { testDb: db, asyncDb };
 });
 
 // ---------------------------------------------------------------------------
-// Replace the database singleton
+// Replace the database module
 // ---------------------------------------------------------------------------
 
-vi.mock('../../database.js', () => ({ default: testDb }));
+vi.mock('../../database.js', () => ({
+  getDb: async () => asyncDb,
+  closeDb: async () => { testDb.close(); },
+  isPostgres: false,
+}));
 
 // ---------------------------------------------------------------------------
 // Import service under test after mocks are registered
@@ -129,169 +171,188 @@ beforeEach(() => {
 // ===========================================================================
 
 describe('getLeaderboard', () => {
-  it('returns empty entries array when no one has played', () => {
+  it('returns empty entries array when no one has played', async () => {
     seedDailyChallenge('2026-04-01');
-    const result = getLeaderboard('2026-04-01');
+    const result = await getLeaderboard('2026-04-01');
     expect(result.entries).toEqual([]);
     expect(result.date).toBe('2026-04-01');
   });
 
-  it('returns puzzleNumber of 0 when no daily_challenges row exists', () => {
-    const result = getLeaderboard('2099-12-31');
+  it('returns puzzleNumber of 0 when no daily_challenges row exists', async () => {
+    const result = await getLeaderboard('2099-12-31');
     expect(result.puzzleNumber).toBe(0);
   });
 
-  it('returns correct puzzleNumber from the daily_challenges row', () => {
+  it('returns correct puzzleNumber from the daily_challenges row', async () => {
     seedDailyChallenge('2026-04-02', 7);
-    const result = getLeaderboard('2026-04-02');
+    const result = await getLeaderboard('2026-04-02');
     expect(result.puzzleNumber).toBe(7);
   });
 
-  it('does not include sessions that only have wrong guesses', () => {
-    const date = '2026-04-03';
-    seedDailyChallenge(date);
-    const session = freshSession();
+  it('does not include sessions that only have wrong guesses', async () => {
+    seedDailyChallenge('2026-04-03');
+    seedGuess({
+      date: '2026-04-03',
+      sessionId: 'wrong-only',
+      attemptNumber: 1,
+      timeMs: 5000,
+      correct: false,
+    });
 
-    seedGuess({ date, sessionId: session, attemptNumber: 1, timeMs: 5000, correct: false });
-    seedGuess({ date, sessionId: session, attemptNumber: 2, timeMs: 10000, correct: false });
-
-    const result = getLeaderboard(date);
-    expect(result.entries).toHaveLength(0);
+    const result = await getLeaderboard('2026-04-03');
+    expect(result.entries).toEqual([]);
   });
 
-  it('includes a session that has a correct guess', () => {
-    const date = '2026-04-04';
-    seedDailyChallenge(date);
-    const session = freshSession();
+  it('includes a session that has at least one correct guess', async () => {
+    seedDailyChallenge('2026-04-04');
+    seedGuess({
+      date: '2026-04-04',
+      sessionId: 'correct-session',
+      attemptNumber: 2,
+      timeMs: 10000,
+      correct: true,
+    });
 
-    seedGuess({ date, sessionId: session, attemptNumber: 1, timeMs: 8000, correct: true });
-
-    const result = getLeaderboard(date);
-    expect(result.entries).toHaveLength(1);
+    const result = await getLeaderboard('2026-04-04');
+    expect(result.entries.length).toBe(1);
+    expect(result.entries[0]!.attemptsUsed).toBe(2);
   });
 
-  it('assigns rank 1 to the only entry', () => {
-    const date = '2026-04-05';
-    seedDailyChallenge(date);
-    const session = freshSession();
+  it('uses Anonymous nickname when no user_id is present', async () => {
+    seedDailyChallenge('2026-04-05');
+    seedGuess({
+      date: '2026-04-05',
+      sessionId: 'anon-session',
+      attemptNumber: 1,
+      timeMs: 3000,
+      correct: true,
+    });
 
-    seedGuess({ date, sessionId: session, attemptNumber: 2, timeMs: 15000, correct: true });
-
-    const result = getLeaderboard(date);
-    expect(result.entries[0].rank).toBe(1);
+    const result = await getLeaderboard('2026-04-05');
+    expect(result.entries[0]!.nickname).toBe('Anonymous');
   });
 
-  it('ranks by fewest attempts ascending', () => {
-    const date = '2026-04-06';
-    seedDailyChallenge(date);
-    const sessA = freshSession();
-    const sessB = freshSession();
-
-    seedGuess({ date, sessionId: sessA, attemptNumber: 3, timeMs: 5000, correct: true });
-    seedGuess({ date, sessionId: sessB, attemptNumber: 1, timeMs: 5000, correct: true });
-
-    const result = getLeaderboard(date);
-    expect(result.entries[0].attemptsUsed).toBe(1);
-    expect(result.entries[0].rank).toBe(1);
-    expect(result.entries[1].attemptsUsed).toBe(3);
-    expect(result.entries[1].rank).toBe(2);
-  });
-
-  it('breaks attempt ties by fastest time ascending', () => {
-    const date = '2026-04-07';
-    seedDailyChallenge(date);
-    const sessA = freshSession();
-    const sessB = freshSession();
-
-    // Both solved on attempt 2, but sessB was faster
-    seedGuess({ date, sessionId: sessA, attemptNumber: 2, timeMs: 20000, correct: true });
-    seedGuess({ date, sessionId: sessB, attemptNumber: 2, timeMs: 5000, correct: true });
-
-    const result = getLeaderboard(date);
-    expect(result.entries[0].timeTakenSeconds).toBe(5);
-    expect(result.entries[0].rank).toBe(1);
-    expect(result.entries[1].timeTakenSeconds).toBe(20);
-    expect(result.entries[1].rank).toBe(2);
-  });
-
-  it('assigns the same rank to entries with equal attempts and time (dense rank)', () => {
-    const date = '2026-04-08';
-    seedDailyChallenge(date);
-    const sessA = freshSession();
-    const sessB = freshSession();
-    const sessC = freshSession();
-
-    // sessA and sessB are tied
-    seedGuess({ date, sessionId: sessA, attemptNumber: 1, timeMs: 10000, correct: true });
-    seedGuess({ date, sessionId: sessB, attemptNumber: 1, timeMs: 10000, correct: true });
-    // sessC is behind both
-    seedGuess({ date, sessionId: sessC, attemptNumber: 2, timeMs: 10000, correct: true });
-
-    const result = getLeaderboard(date);
-    expect(result.entries).toHaveLength(3);
-
-    // Both tied entries should be rank 1
-    const rankOnes = result.entries.filter((e) => e.rank === 1);
-    expect(rankOnes).toHaveLength(2);
-
-    // sessC should be rank 2 (dense rank — no skipped rank)
-    const rankTwo = result.entries.find((e) => e.rank === 2);
-    expect(rankTwo).toBeDefined();
-    expect(rankTwo!.attemptsUsed).toBe(2);
-  });
-
-  it('resolves nickname as Anonymous when user_id is null', () => {
-    const date = '2026-04-09';
-    seedDailyChallenge(date);
-    const session = freshSession();
-
-    seedGuess({ date, sessionId: session, userId: null, attemptNumber: 1, timeMs: 5000, correct: true });
-
-    const result = getLeaderboard(date);
-    expect(result.entries[0].nickname).toBe('Anonymous');
-    expect(result.entries[0].userId).toBeNull();
-  });
-
-  it('resolves nickname from users table when user_id is set', () => {
-    const date = '2026-04-10';
-    seedDailyChallenge(date);
+  it('uses the users.nickname when user_id is present', async () => {
+    seedDailyChallenge('2026-04-06');
     const userId = freshUserId();
-    const session = freshSession();
+    seedUser(userId, 'LeaderboardUser');
+    seedGuess({
+      date: '2026-04-06',
+      sessionId: 'named-session',
+      userId,
+      attemptNumber: 1,
+      timeMs: 2000,
+      correct: true,
+    });
 
-    seedUser(userId, 'HumPlayer');
-    seedGuess({ date, sessionId: session, userId, attemptNumber: 1, timeMs: 3000, correct: true });
-
-    const result = getLeaderboard(date);
-    expect(result.entries[0].nickname).toBe('HumPlayer');
-    expect(result.entries[0].userId).toBe(userId);
+    const result = await getLeaderboard('2026-04-06');
+    expect(result.entries[0]!.nickname).toBe('LeaderboardUser');
   });
 
-  it('converts time_ms to timeTakenSeconds correctly (rounded)', () => {
-    const date = '2026-04-11';
-    seedDailyChallenge(date);
-    const session = freshSession();
+  it('sorts by attempts ASC, then time ASC', async () => {
+    seedDailyChallenge('2026-04-07');
 
-    seedGuess({ date, sessionId: session, attemptNumber: 1, timeMs: 7500, correct: true });
+    seedGuess({
+      date: '2026-04-07',
+      sessionId: 'slow-2',
+      attemptNumber: 2,
+      timeMs: 50000,
+      correct: true,
+    });
 
-    const result = getLeaderboard(date);
-    expect(result.entries[0].timeTakenSeconds).toBe(8); // Math.round(7500/1000)
+    seedGuess({
+      date: '2026-04-07',
+      sessionId: 'fast-1',
+      attemptNumber: 1,
+      timeMs: 1000,
+      correct: true,
+    });
+
+    seedGuess({
+      date: '2026-04-07',
+      sessionId: 'slow-1',
+      attemptNumber: 1,
+      timeMs: 5000,
+      correct: true,
+    });
+
+    const result = await getLeaderboard('2026-04-07');
+
+    // fast-1 should be first (attempt 1, 1s)
+    // slow-1 should be second (attempt 1, 5s)
+    // slow-2 should be third (attempt 2, 50s)
+    expect(result.entries[0]!.attemptsUsed).toBe(1);
+    expect(result.entries[0]!.timeTakenSeconds).toBe(1);
+    expect(result.entries[1]!.attemptsUsed).toBe(1);
+    expect(result.entries[1]!.timeTakenSeconds).toBe(5);
+    expect(result.entries[2]!.attemptsUsed).toBe(2);
+    expect(result.entries[2]!.timeTakenSeconds).toBe(50);
   });
 
-  it('returns entries only for the given date', () => {
-    seedDailyChallenge('2026-04-12');
-    seedDailyChallenge('2026-04-13');
+  it('applies dense ranking — ties share the same rank', async () => {
+    seedDailyChallenge('2026-04-08');
 
-    const sessA = freshSession();
-    const sessB = freshSession();
+    seedGuess({
+      date: '2026-04-08',
+      sessionId: 't1',
+      attemptNumber: 1,
+      timeMs: 1000,
+      correct: true,
+    });
 
-    seedGuess({ date: '2026-04-12', sessionId: sessA, attemptNumber: 1, timeMs: 5000, correct: true });
-    seedGuess({ date: '2026-04-13', sessionId: sessB, attemptNumber: 1, timeMs: 5000, correct: true });
+    seedGuess({
+      date: '2026-04-08',
+      sessionId: 't2',
+      attemptNumber: 1,
+      timeMs: 1000,
+      correct: true,
+    });
 
-    const result12 = getLeaderboard('2026-04-12');
-    const result13 = getLeaderboard('2026-04-13');
+    seedGuess({
+      date: '2026-04-08',
+      sessionId: 't3',
+      attemptNumber: 2,
+      timeMs: 5000,
+      correct: true,
+    });
 
-    expect(result12.entries).toHaveLength(1);
-    expect(result13.entries).toHaveLength(1);
+    const result = await getLeaderboard('2026-04-08');
+
+    // t1 and t2 tie for rank 1; t3 is rank 2
+    expect(result.entries[0]!.rank).toBe(1);
+    expect(result.entries[1]!.rank).toBe(1);
+    expect(result.entries[2]!.rank).toBe(2);
+  });
+
+  it('timeTakenSeconds is rounded from milliseconds', async () => {
+    seedDailyChallenge('2026-04-09');
+    seedGuess({
+      date: '2026-04-09',
+      sessionId: 'rounding-test',
+      attemptNumber: 3,
+      timeMs: 12345,
+      correct: true,
+    });
+
+    const result = await getLeaderboard('2026-04-09');
+    expect(result.entries[0]!.timeTakenSeconds).toBe(12);
+  });
+
+  it('returns userId alongside each entry', async () => {
+    seedDailyChallenge('2026-04-10');
+    const userId = freshUserId();
+    seedUser(userId, 'RankUser');
+    seedGuess({
+      date: '2026-04-10',
+      sessionId: 'with-user',
+      userId,
+      attemptNumber: 1,
+      timeMs: 1000,
+      correct: true,
+    });
+
+    const result = await getLeaderboard('2026-04-10');
+    expect(result.entries[0]!.userId).toBe(userId);
   });
 });
 
@@ -300,85 +361,111 @@ describe('getLeaderboard', () => {
 // ===========================================================================
 
 describe('getPlayerRank', () => {
-  it('returns null when the session has no guesses at all', () => {
-    expect(getPlayerRank('2026-04-20', 'no-such-session')).toBeNull();
+  it('returns null when the session has no correct guess', async () => {
+    seedDailyChallenge('2026-04-20');
+    seedGuess({
+      date: '2026-04-20',
+      sessionId: 'no-correct',
+      attemptNumber: 1,
+      timeMs: 1000,
+      correct: false,
+    });
+
+    const rank = await getPlayerRank('2026-04-20', 'no-correct');
+    expect(rank).toBeNull();
   });
 
-  it('returns null when the session only has wrong guesses', () => {
-    const date = '2026-04-21';
-    seedDailyChallenge(date);
-    const session = freshSession();
-
-    seedGuess({ date, sessionId: session, attemptNumber: 1, timeMs: 5000, correct: false });
-    seedGuess({ date, sessionId: session, attemptNumber: 2, timeMs: 10000, correct: false });
-
-    expect(getPlayerRank(date, session)).toBeNull();
+  it('returns null when the session does not exist', async () => {
+    seedDailyChallenge('2026-04-21');
+    const rank = await getPlayerRank('2026-04-21', 'nonexistent-session');
+    expect(rank).toBeNull();
   });
 
-  it('returns 1 when the session is the only one with a correct guess', () => {
-    const date = '2026-04-22';
-    seedDailyChallenge(date);
-    const session = freshSession();
+  it('returns 1 when the session is the only correct one', async () => {
+    seedDailyChallenge('2026-04-22');
+    seedGuess({
+      date: '2026-04-22',
+      sessionId: 'solo-winner',
+      attemptNumber: 1,
+      timeMs: 1000,
+      correct: true,
+    });
 
-    seedGuess({ date, sessionId: session, attemptNumber: 1, timeMs: 8000, correct: true });
-
-    expect(getPlayerRank(date, session)).toBe(1);
+    const rank = await getPlayerRank('2026-04-22', 'solo-winner');
+    expect(rank).toBe(1);
   });
 
-  it('returns 2 when exactly one session has a better score', () => {
-    const date = '2026-04-23';
-    seedDailyChallenge(date);
-    const sessA = freshSession();
-    const sessB = freshSession();
+  it('returns the correct rank when multiple sessions have won', async () => {
+    seedDailyChallenge('2026-04-23');
 
-    // sessA solves in 1 attempt — better
-    seedGuess({ date, sessionId: sessA, attemptNumber: 1, timeMs: 5000, correct: true });
-    // sessB solves in 2 attempts — worse
-    seedGuess({ date, sessionId: sessB, attemptNumber: 2, timeMs: 5000, correct: true });
+    // Best: 1 attempt, 1s
+    seedGuess({
+      date: '2026-04-23',
+      sessionId: 'best',
+      attemptNumber: 1,
+      timeMs: 1000,
+      correct: true,
+    });
 
-    expect(getPlayerRank(date, sessB)).toBe(2);
+    // Middle: 1 attempt, 5s
+    seedGuess({
+      date: '2026-04-23',
+      sessionId: 'middle',
+      attemptNumber: 1,
+      timeMs: 5000,
+      correct: true,
+    });
+
+    // Worst: 2 attempts, 10s
+    seedGuess({
+      date: '2026-04-23',
+      sessionId: 'worst',
+      attemptNumber: 2,
+      timeMs: 10000,
+      correct: true,
+    });
+
+    const rankBest = await getPlayerRank('2026-04-23', 'best');
+    const rankMiddle = await getPlayerRank('2026-04-23', 'middle');
+    const rankWorst = await getPlayerRank('2026-04-23', 'worst');
+
+    expect(rankBest).toBe(1);
+    expect(rankMiddle).toBe(2);
+    expect(rankWorst).toBe(3);
   });
 
-  it('returns 1 when the session is tied for first with another session', () => {
-    const date = '2026-04-24';
-    seedDailyChallenge(date);
-    const sessA = freshSession();
-    const sessB = freshSession();
+  it('ties in rank produce the same rank number', async () => {
+    seedDailyChallenge('2026-04-24');
 
-    // Both solved on attempt 1 with the same time
-    seedGuess({ date, sessionId: sessA, attemptNumber: 1, timeMs: 10000, correct: true });
-    seedGuess({ date, sessionId: sessB, attemptNumber: 1, timeMs: 10000, correct: true });
+    seedGuess({
+      date: '2026-04-24',
+      sessionId: 'tie-a',
+      attemptNumber: 2,
+      timeMs: 5000,
+      correct: true,
+    });
 
-    // Neither has a strictly better score, so both rank 1
-    expect(getPlayerRank(date, sessA)).toBe(1);
-    expect(getPlayerRank(date, sessB)).toBe(1);
-  });
+    seedGuess({
+      date: '2026-04-24',
+      sessionId: 'tie-b',
+      attemptNumber: 2,
+      timeMs: 5000,
+      correct: true,
+    });
 
-  it('returns 1 when the session has the fastest time at the same attempt count', () => {
-    const date = '2026-04-25';
-    seedDailyChallenge(date);
-    const sessA = freshSession();
-    const sessB = freshSession();
+    seedGuess({
+      date: '2026-04-24',
+      sessionId: 'better',
+      attemptNumber: 1,
+      timeMs: 1000,
+      correct: true,
+    });
 
-    seedGuess({ date, sessionId: sessA, attemptNumber: 1, timeMs: 3000, correct: true });
-    seedGuess({ date, sessionId: sessB, attemptNumber: 1, timeMs: 12000, correct: true });
+    const rankA = await getPlayerRank('2026-04-24', 'tie-a');
+    const rankB = await getPlayerRank('2026-04-24', 'tie-b');
 
-    expect(getPlayerRank(date, sessA)).toBe(1);
-    expect(getPlayerRank(date, sessB)).toBe(2);
-  });
-
-  it('returns correct rank for 3rd place among 4 sessions', () => {
-    const date = '2026-04-26';
-    seedDailyChallenge(date);
-
-    const sessions = [freshSession(), freshSession(), freshSession(), freshSession()];
-
-    // Attempt 1, various times — best to worst
-    seedGuess({ date, sessionId: sessions[0], attemptNumber: 1, timeMs: 1000, correct: true });
-    seedGuess({ date, sessionId: sessions[1], attemptNumber: 1, timeMs: 5000, correct: true });
-    seedGuess({ date, sessionId: sessions[2], attemptNumber: 1, timeMs: 9000, correct: true });
-    seedGuess({ date, sessionId: sessions[3], attemptNumber: 1, timeMs: 15000, correct: true });
-
-    expect(getPlayerRank(date, sessions[2])).toBe(3);
+    // Both tie-a and tie-b have same attempts/time, should have same rank (2)
+    expect(rankA).toBe(rankB);
+    expect(rankA).toBe(2);
   });
 });

@@ -16,7 +16,7 @@ const router = Router();
 // Query params: sessionId (required)
 // ---------------------------------------------------------------------------
 
-router.get('/', (req: Request, res: Response, next: NextFunction): void => {
+router.get('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const sessionId =
       typeof req.query['sessionId'] === 'string' ? req.query['sessionId'].trim() : '';
@@ -29,7 +29,7 @@ router.get('/', (req: Request, res: Response, next: NextFunction): void => {
     }
 
     const today = getTodayDate();
-    const challenge = getDailyChallenge(today, sessionId);
+    const challenge = await getDailyChallenge(today, sessionId);
     res.json(challenge);
   } catch (err) {
     next(err);
@@ -42,7 +42,7 @@ router.get('/', (req: Request, res: Response, next: NextFunction): void => {
 // Body: { guess: string, sessionId: string, userId?: string }
 // ---------------------------------------------------------------------------
 
-router.post('/guess', (req: Request, res: Response, next: NextFunction): void => {
+router.post('/guess', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const body = req.body as Record<string, unknown>;
 
@@ -68,7 +68,7 @@ router.post('/guess', (req: Request, res: Response, next: NextFunction): void =>
         : undefined;
 
     const today = getTodayDate();
-    const result = submitDailyGuess(today, guessText.trim(), sessionId.trim(), userId);
+    const result = await submitDailyGuess(today, guessText.trim(), sessionId.trim(), userId);
     res.json(result);
   } catch (err) {
     next(err);
@@ -81,7 +81,7 @@ router.post('/guess', (req: Request, res: Response, next: NextFunction): void =>
 // Query params: sessionId (required)
 // ---------------------------------------------------------------------------
 
-router.get('/result', (req: Request, res: Response, next: NextFunction): void => {
+router.get('/result', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const sessionId =
       typeof req.query['sessionId'] === 'string' ? req.query['sessionId'].trim() : '';
@@ -94,7 +94,7 @@ router.get('/result', (req: Request, res: Response, next: NextFunction): void =>
     }
 
     const today = getTodayDate();
-    const result = getDailyResult(today, sessionId);
+    const result = await getDailyResult(today, sessionId);
 
     if (!result) {
       res.status(404).json({

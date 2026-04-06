@@ -1,4 +1,4 @@
-import db from '../database.js';
+import { getDb } from '../database.js';
 import { DAILY_EPOCH } from '../config.js';
 import type { AppError } from '../middleware/errorHandler.js';
 
@@ -293,49 +293,6 @@ function makeOperationalError(message: string, statusCode: number): AppError {
 }
 
 // ---------------------------------------------------------------------------
-// Database prepared statements
-// ---------------------------------------------------------------------------
-
-const stmtSelectDailyChallenge = db.prepare<[string]>(
-  'SELECT * FROM daily_challenges WHERE date = ?',
-);
-
-const stmtInsertDailyChallenge = db.prepare<{
-  date: string;
-  puzzle_number: number;
-  song_title: string;
-  song_artist: string;
-  song_id: null;
-  spotify_preview_url: null;
-  spotify_album_art: null;
-}>(`
-  INSERT INTO daily_challenges
-    (date, puzzle_number, song_title, song_artist, song_id, spotify_preview_url, spotify_album_art)
-  VALUES
-    (@date, @puzzle_number, @song_title, @song_artist, @song_id, @spotify_preview_url, @spotify_album_art)
-`);
-
-const stmtGetSessionDailyGuesses = db.prepare<[string, string]>(
-  'SELECT * FROM daily_guesses WHERE date = ? AND session_id = ? ORDER BY attempt_number ASC',
-);
-
-const stmtInsertDailyGuess = db.prepare<{
-  date: string;
-  user_id: string | null;
-  session_id: string;
-  guess_text: string;
-  correct: number;
-  attempt_number: number;
-  time_ms: number | null;
-  created_at: string;
-}>(`
-  INSERT INTO daily_guesses
-    (date, user_id, session_id, guess_text, correct, attempt_number, time_ms, created_at)
-  VALUES
-    (@date, @user_id, @session_id, @guess_text, @correct, @attempt_number, @time_ms, @created_at)
-`);
-
-// ---------------------------------------------------------------------------
 // Public service functions
 // ---------------------------------------------------------------------------
 
@@ -381,33 +338,43 @@ export function selectSongForDate(date: string): { title: string; artist: string
  * Get or create the daily_challenges row for the given date.
  * Idempotent — safe to call multiple times for the same date.
  */
-export function ensureDailyChallenge(date: string): DailyChallengeRow {
-  const existing = stmtSelectDailyChallenge.get(date) as DailyChallengeRow | undefined;
+export async function ensureDailyChallenge(date: string): Promise<DailyChallengeRow> {
+  const db = await getDb();
+  const existing = await db.get<DailyChallengeRow>(
+    'SELECT * FROM daily_challenges WHERE date = $1',
+    [date]
+  );
   if (existing) return existing;
 
   const song = selectSongForDate(date);
   const puzzleNumber = getPuzzleNumber(date);
 
-  stmtInsertDailyChallenge.run({
-    date,
-    puzzle_number: puzzleNumber,
-    song_title: song.title,
-    song_artist: song.artist,
-    song_id: null,
-    spotify_preview_url: null,
-    spotify_album_art: null,
-  });
+  await db.run(
+    `INSERT INTO daily_challenges
+      (date, puzzle_number, song_title, song_artist, song_id, spotify_preview_url, spotify_album_art)
+    VALUES
+      ($1, $2, $3, $4, $5, $6, $7)`,
+    [date, puzzleNumber, song.title, song.artist, null, null, null]
+  );
 
-  return stmtSelectDailyChallenge.get(date) as DailyChallengeRow;
+  const created = await db.get<DailyChallengeRow>(
+    'SELECT * FROM daily_challenges WHERE date = $1',
+    [date]
+  );
+  return created!;
 }
 
 /**
  * Return the public view of today's daily challenge for a given session.
  * The song answer is never included in this response.
  */
-export function getDailyChallenge(date: string, sessionId: string): DailyChallengePublic {
-  const challenge = ensureDailyChallenge(date);
-  const guesses = stmtGetSessionDailyGuesses.all(date, sessionId) as DailyGuessRow[];
+export async function getDailyChallenge(date: string, sessionId: string): Promise<DailyChallengePublic> {
+  const db = await getDb();
+  const challenge = await ensureDailyChallenge(date);
+  const guesses = await db.all<DailyGuessRow>(
+    'SELECT * FROM daily_guesses WHERE date = $1 AND session_id = $2 ORDER BY attempt_number ASC',
+    [date, sessionId]
+  );
 
   const attemptsUsed = guesses.length;
   const won = guesses.some((g) => g.correct === 1);
@@ -432,14 +399,18 @@ export function getDailyChallenge(date: string, sessionId: string): DailyChallen
  *
  * Throws an operational AppError for 409 (already finished).
  */
-export function submitDailyGuess(
+export async function submitDailyGuess(
   date: string,
   guessText: string,
   sessionId: string,
   userId?: string,
-): DailyGuessResult {
-  const challenge = ensureDailyChallenge(date);
-  const previousGuesses = stmtGetSessionDailyGuesses.all(date, sessionId) as DailyGuessRow[];
+): Promise<DailyGuessResult> {
+  const db = await getDb();
+  const challenge = await ensureDailyChallenge(date);
+  const previousGuesses = await db.all<DailyGuessRow>(
+    'SELECT * FROM daily_guesses WHERE date = $1 AND session_id = $2 ORDER BY attempt_number ASC',
+    [date, sessionId]
+  );
 
   const alreadyCorrect = previousGuesses.some((g) => g.correct === 1);
   if (alreadyCorrect) {
@@ -464,16 +435,13 @@ export function submitDailyGuess(
     timeTakenMs = Date.now() - firstAt;
   }
 
-  stmtInsertDailyGuess.run({
-    date,
-    user_id: userId ?? null,
-    session_id: sessionId,
-    guess_text: guessText.trim(),
-    correct: correct ? 1 : 0,
-    attempt_number: attemptNumber,
-    time_ms: timeTakenMs,
-    created_at: new Date().toISOString(),
-  });
+  await db.run(
+    `INSERT INTO daily_guesses
+      (date, user_id, session_id, guess_text, correct, attempt_number, time_ms, created_at)
+    VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [date, userId ?? null, sessionId, guessText.trim(), correct ? 1 : 0, attemptNumber, timeTakenMs, new Date().toISOString()]
+  );
 
   const attemptsUsed = attemptNumber;
   const attemptsRemaining = MAX_ATTEMPTS - attemptsUsed;
@@ -498,11 +466,18 @@ export function submitDailyGuess(
  * Return the completed result for a session, including the Wordle-style share
  * text. Returns null if the session has no guesses or is not yet finished.
  */
-export function getDailyResult(date: string, sessionId: string): DailyResult | null {
-  const challenge = stmtSelectDailyChallenge.get(date) as DailyChallengeRow | undefined;
+export async function getDailyResult(date: string, sessionId: string): Promise<DailyResult | null> {
+  const db = await getDb();
+  const challenge = await db.get<DailyChallengeRow>(
+    'SELECT * FROM daily_challenges WHERE date = $1',
+    [date]
+  );
   if (!challenge) return null;
 
-  const guesses = stmtGetSessionDailyGuesses.all(date, sessionId) as DailyGuessRow[];
+  const guesses = await db.all<DailyGuessRow>(
+    'SELECT * FROM daily_guesses WHERE date = $1 AND session_id = $2 ORDER BY attempt_number ASC',
+    [date, sessionId]
+  );
   if (guesses.length === 0) return null;
 
   const won = guesses.some((g) => g.correct === 1);

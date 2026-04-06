@@ -17,7 +17,7 @@ function todayUtc(): string {
 // Return the ranked leaderboard for the given date (defaults to today).
 // ---------------------------------------------------------------------------
 
-router.get('/', (req: Request, res: Response, next: NextFunction): void => {
+router.get('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const rawDate = req.query['date'];
 
@@ -41,7 +41,7 @@ router.get('/', (req: Request, res: Response, next: NextFunction): void => {
       date = rawDate;
     }
 
-    const result = getLeaderboard(date);
+    const result = await getLeaderboard(date);
     res.json(result);
   } catch (err) {
     next(err);

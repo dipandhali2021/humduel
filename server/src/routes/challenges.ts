@@ -37,7 +37,7 @@ router.post(
   '/',
   uploadLimiter,
   upload.single('audio'),
-  (req: Request, res: Response, next: NextFunction): void => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       // ---- File presence ----
       if (!req.file) {
@@ -120,7 +120,7 @@ router.post(
       }
 
       // ---- Persist challenge ----
-      const result = createChallengeWithId(challengeId, {
+      const result = await createChallengeWithId(challengeId, {
         audioFilename,
         waveformData: parsedWaveform,
         songTitle: (songTitle as string).trim(),
@@ -141,10 +141,10 @@ router.post(
 // Retrieve a challenge (without the song answer).
 // ---------------------------------------------------------------------------
 
-router.get('/:id', (req: Request, res: Response, next: NextFunction): void => {
+router.get('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params as { id: string };
-    const challenge = getChallenge(id);
+    const challenge = await getChallenge(id);
 
     if (!challenge) {
       const err: AppError = new Error('Challenge not found');
@@ -173,7 +173,7 @@ router.get('/:id', (req: Request, res: Response, next: NextFunction): void => {
 // Submit a guess for a challenge.
 // ---------------------------------------------------------------------------
 
-router.post('/:id/guess', (req: Request, res: Response, next: NextFunction): void => {
+router.post('/:id/guess', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params as { id: string };
     const body = req.body as Record<string, unknown>;
@@ -194,7 +194,7 @@ router.post('/:id/guess', (req: Request, res: Response, next: NextFunction): voi
         ? body['sessionId'].trim()
         : undefined;
 
-    const result = submitGuess(id, guessText.trim(), sessionId);
+    const result = await submitGuess(id, guessText.trim(), sessionId);
     res.json(result);
   } catch (err) {
     next(err);
@@ -206,7 +206,7 @@ router.post('/:id/guess', (req: Request, res: Response, next: NextFunction): voi
 // Get the completed result for a session.
 // ---------------------------------------------------------------------------
 
-router.get('/:id/result', (req: Request, res: Response, next: NextFunction): void => {
+router.get('/:id/result', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params as { id: string };
     const sessionId =
@@ -219,7 +219,7 @@ router.get('/:id/result', (req: Request, res: Response, next: NextFunction): voi
       return;
     }
 
-    const result = getResult(id, sessionId);
+    const result = await getResult(id, sessionId);
 
     if (!result) {
       res.status(404).json({
