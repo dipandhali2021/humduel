@@ -116,7 +116,7 @@ describe('generateShareText', () => {
       guessResults: [false, true],
     });
     expect(text).toContain('test-id-456');
-    expect(text).toContain('humduel.io/challenge/test-id-456');
+    expect(text).toContain('https://humduel.vercel.app/c/test-id-456');
   });
 
   it('contains the full challenge URL with site base', () => {
@@ -127,7 +127,7 @@ describe('generateShareText', () => {
       challengeId: 'xyz-789',
       guessResults: [false, false],
     });
-    expect(text).toContain('humduel.io/challenge/xyz-789');
+    expect(text).toContain('https://humduel.vercel.app/c/xyz-789');
   });
 
   it('respects maxAttempts in the attempt count line', () => {
