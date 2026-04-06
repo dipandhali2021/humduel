@@ -103,7 +103,7 @@ export async function getUserStats(userId: string): Promise<UserStatsResult | nu
     FROM daily_guesses dg
     LEFT JOIN daily_challenges dc ON dc.date = dg.date
     WHERE dg.user_id = $1
-    GROUP BY dg.date
+    GROUP BY dg.date, dc.puzzle_number
     ORDER BY dg.date DESC
     LIMIT 10`,
     [userId]
