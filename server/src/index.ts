@@ -51,7 +51,7 @@ app.use('/api/users', usersRouter);
 // --- Global error handler (must be registered last) ---
 app.use(errorHandler);
 
-// --- Server startup ---
+// --- Server startup (only for local development) ---
 async function startServer() {
   // Initialize database connection and schema
   await getDb();
@@ -92,9 +92,13 @@ async function startServer() {
   return server;
 }
 
-startServer().catch((err) => {
-  console.error('[HumDuel] Failed to start server:', err);
-  process.exit(1);
-});
+// Only start the server if this file is run directly (not in Vercel serverless)
+// Vercel sets VERCEL environment variable
+if (!process.env.VERCEL) {
+  startServer().catch((err) => {
+    console.error('[HumDuel] Failed to start server:', err);
+    process.exit(1);
+  });
+}
 
 export default app;
