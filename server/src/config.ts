@@ -18,7 +18,8 @@ function requireEnv(key: string, fallback?: string): string {
 export const NODE_ENV = process.env['NODE_ENV'] ?? 'development';
 export const PORT = parseInt(process.env['PORT'] ?? '3001', 10);
 export const DATABASE_PATH = process.env['DATABASE_PATH'] ?? path.resolve(__dirname, '../../data/humduel.db');
-export const UPLOAD_DIR = process.env['UPLOAD_DIR'] ?? path.resolve(__dirname, '../../uploads');
+export const UPLOAD_DIR = process.env['UPLOAD_DIR'] ?? 
+  (process.env.VERCEL ? '/tmp/uploads' : path.resolve(__dirname, '../../uploads'));
 export const CORS_ORIGIN = process.env['CORS_ORIGIN'] ?? 'http://localhost:5173';
 
 // Spotify API credentials (optional — falls back to local catalog if not set)
