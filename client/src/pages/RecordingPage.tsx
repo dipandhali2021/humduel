@@ -233,7 +233,7 @@ function CreatedScreen({ challenge, onCreateAnother }: CreatedScreenProps) {
       <div className="flex flex-col gap-3 w-full">
         {/* Deep link to the guessing page */}
         <Link
-          to={`/challenge/${challenge.id}`}
+          to={`/c/${challenge.id}`}
           className="w-full h-12 inline-flex items-center justify-center gap-2 rounded-xl font-label font-medium text-base border border-primary text-primary hover:bg-primary/10 transition-colors duration-150"
         >
           Try Guessing

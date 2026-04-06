@@ -58,7 +58,7 @@ describe('createChallenge', () => {
   it('sends a POST request to /api/challenges', async () => {
     const responseBody = {
       id: 'abc123',
-      challengeUrl: 'http://localhost:3001/challenge/abc123',
+      challengeUrl: 'http://localhost:3001/c/abc123',
       expiresAt: '2025-01-01T00:00:00Z',
       createdAt: '2024-12-31T00:00:00Z',
     };
@@ -81,7 +81,7 @@ describe('createChallenge', () => {
   it('sends FormData with correct fields', async () => {
     const responseBody = {
       id: 'abc123',
-      challengeUrl: 'http://localhost:3001/challenge/abc123',
+      challengeUrl: 'http://localhost:3001/c/abc123',
       expiresAt: '2025-01-01T00:00:00Z',
       createdAt: '2024-12-31T00:00:00Z',
     };
@@ -112,7 +112,7 @@ describe('createChallenge', () => {
   it('omits creatorAlias from FormData when undefined', async () => {
     const responseBody = {
       id: 'abc123',
-      challengeUrl: 'http://localhost:3001/challenge/abc123',
+      challengeUrl: 'http://localhost:3001/c/abc123',
       expiresAt: '2025-01-01T00:00:00Z',
       createdAt: '2024-12-31T00:00:00Z',
     };
@@ -134,7 +134,7 @@ describe('createChallenge', () => {
   it('returns the parsed response body on success', async () => {
     const responseBody = {
       id: 'xyz789',
-      challengeUrl: 'http://localhost:3001/challenge/xyz789',
+      challengeUrl: 'http://localhost:3001/c/xyz789',
       expiresAt: '2025-01-01T00:00:00Z',
       createdAt: '2024-12-31T00:00:00Z',
     };

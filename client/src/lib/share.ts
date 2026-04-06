@@ -1,4 +1,4 @@
-const SITE_BASE = 'humduel.io';
+const SITE_BASE = 'https://humduel.vercel.app';
 
 // ─── Share text generation ────────────────────────────────────────────────────
 
@@ -11,7 +11,7 @@ const SITE_BASE = 'humduel.io';
  *   I guessed it in 3/6 attempts!
  *   🟥🟥🟩
  *
- *   humduel.io/challenge/abc123
+ *   https://humduel.vercel.app/c/abc123
  *
  * Failed example:
  *   🎵 HumDuel
@@ -19,7 +19,7 @@ const SITE_BASE = 'humduel.io';
  *   I couldn't guess this one! 😅
  *   🟥🟥🟥🟥🟥🟥
  *
- *   humduel.io/challenge/abc123
+ *   https://humduel.vercel.app/c/abc123
  */
 export function generateShareText(params: {
   correct: boolean;
@@ -32,7 +32,7 @@ export function generateShareText(params: {
   const { correct, attemptsUsed, maxAttempts, challengeId, guessResults } = params;
 
   const squares = guessResults.map((hit) => (hit ? '🟩' : '🟥')).join('');
-  const challengeUrl = `${SITE_BASE}/challenge/${challengeId}`;
+  const challengeUrl = `${SITE_BASE}/c/${challengeId}`;
 
   const resultLine = correct
     ? `I guessed it in ${attemptsUsed}/${maxAttempts} attempts!`
