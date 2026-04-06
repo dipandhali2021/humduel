@@ -96,11 +96,6 @@ const { getLeaderboard, getPlayerRank } = await import('../../services/leaderboa
 // Helpers
 // ---------------------------------------------------------------------------
 
-let sessionCounter = 0;
-function _freshSession(): string {
-  return `lb-session-${++sessionCounter}`;
-}
-
 let userCounter = 0;
 function freshUserId(): string {
   return `lb-user-${++userCounter}`;
