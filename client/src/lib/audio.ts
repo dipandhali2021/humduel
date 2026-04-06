@@ -30,7 +30,7 @@ export function formatTime(seconds: number): string {
 export function createAudioContext(options?: AudioContextOptions): AudioContext {
   const AudioCtx =
     window.AudioContext ??
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
 
   if (!AudioCtx) {
