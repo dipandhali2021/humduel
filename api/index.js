@@ -2,25 +2,21 @@
 // This file imports the compiled Express app and exports it for Vercel
 
 // Handler cache
-let app = null;
+let appPromise = null;
 let dbInitialized = false;
 
 module.exports = async (req, res) => {
-  // Lazy load app on first request
-  if (!app) {
-    try {
-      app = require('../server/dist/index.js').default;
-    } catch (e) {
-      console.error('Failed to load app:', e);
-      res.status(500).json({ error: 'Server initialization failed', details: e.message });
-      return;
-    }
+  // Lazy load app on first request using dynamic import (ES module)
+  if (!appPromise) {
+    appPromise = import('../server/dist/index.js').then(m => m.default);
   }
+  
+  const app = await appPromise;
   
   // Initialize database on cold start
   if (!dbInitialized) {
     try {
-      const { getDb } = require('../server/dist/database.js');
+      const { getDb } = await import('../server/dist/database.js');
       await getDb();
       dbInitialized = true;
     } catch (e) {
