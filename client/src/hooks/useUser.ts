@@ -4,6 +4,7 @@ import {
   updateUser as apiUpdateUser,
   getUser as apiGetUser,
   getUserStats as apiGetUserStats,
+  ApiError,
 } from '@/lib/api';
 import type { UserResponse, UserStatsResponse } from '@/types';
 
@@ -52,6 +53,13 @@ export function useUser(): UseUserReturn {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+        // If the stored userId no longer exists on the server, clear it
+        // so the user can create a new profile instead of seeing errors.
+        if (err instanceof ApiError && err.status === 404) {
+          localStorage.removeItem(USER_ID_KEY);
+          setLoading(false);
+          return;
+        }
         const message =
           err instanceof Error ? err.message : 'Failed to load profile.';
         setError(message);

@@ -41,6 +41,7 @@ export function AudioRecorder({ onRecordingComplete, maxDuration = MAX_DURATION 
     audioUrl,
     duration,
     analyserNode,
+    error: recorderError,
     startRecording,
     stopRecording,
     resetRecording,
@@ -149,6 +150,16 @@ export function AudioRecorder({ onRecordingComplete, maxDuration = MAX_DURATION 
           className="w-full bg-surface-elevated border border-warning/40 text-warning text-sm font-label px-4 py-3 rounded-xl text-center animate-fade-in"
         >
           {toast.text}
+        </div>
+      )}
+
+      {/* Recorder error (e.g. mic permission denied) */}
+      {recorderError && (
+        <div
+          role="alert"
+          className="w-full bg-surface-elevated border border-error/40 text-error text-sm font-label px-4 py-3 rounded-xl text-center"
+        >
+          {recorderError}
         </div>
       )}
 

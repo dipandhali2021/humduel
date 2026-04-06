@@ -11,8 +11,7 @@ import PageContainer from '@/components/layout/PageContainer';
 // Constants
 // ---------------------------------------------------------------------------
 
-const API_BASE =
-  (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001';
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) || '';
 
 /** Delay (ms) before navigating to the result page after completion. */
 const RESULT_NAV_DELAY_MS = 1500;

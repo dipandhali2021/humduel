@@ -13,7 +13,7 @@ import type {
 } from '@/types';
 
 // Trailing slash is intentionally omitted; all paths start with '/'.
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001';
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) || '';
 
 // ─── Error handling ───────────────────────────────────────────────────────────
 
@@ -129,7 +129,7 @@ export async function getChallengeResult(
 
 /** Verify that the API server is reachable and healthy. */
 export async function healthCheck(): Promise<{ status: string }> {
-  return fetchJson<{ status: string }>(`${API_BASE}/health`);
+  return fetchJson<{ status: string }>(`${API_BASE}/api/health`);
 }
 
 // ─── Sprint 3: Daily Challenge API ──────────────────────────────────────────

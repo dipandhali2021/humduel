@@ -69,7 +69,7 @@ const ResultPage = () => {
 
       // If the session has not finished, redirect back so the player can keep guessing.
       if (!result.completed) {
-        navigate(`/challenge/${encodeURIComponent(id)}`, { replace: true });
+        navigate(`/c/${encodeURIComponent(id)}`, { replace: true });
         return;
       }
 
@@ -116,7 +116,7 @@ const ResultPage = () => {
 
   // ── Navigate to recording flow ─────────────────────────────────────────────
   const handleCreateChallenge = useCallback(() => {
-    navigate('/record');
+    navigate('/app/record');
   }, [navigate]);
 
   // ── Render ─────────────────────────────────────────────────────────────────

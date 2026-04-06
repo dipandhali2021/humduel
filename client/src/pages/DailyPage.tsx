@@ -831,7 +831,7 @@ const DailyPage = () => {
   }, [navigate]);
 
   const handleViewLeaderboard = useCallback(() => {
-    navigate('/leaderboard');
+    navigate('/app/leaderboard');
   }, [navigate]);
 
   // Dismiss submit error when the user starts typing again

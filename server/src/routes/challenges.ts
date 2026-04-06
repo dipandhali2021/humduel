@@ -84,11 +84,11 @@ router.post(
         return;
       }
 
-      if (!Array.isArray(parsedWaveform) || parsedWaveform.length !== 200) {
+      if (!Array.isArray(parsedWaveform) || parsedWaveform.length < 100 || parsedWaveform.length > 512) {
         sendValidationError(res, [
           {
             field: 'waveformData',
-            message: '"waveformData" must be a JSON array of exactly 200 numbers',
+            message: '"waveformData" must be a JSON array of 100-512 numbers',
           },
         ]);
         return;

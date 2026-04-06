@@ -10,6 +10,7 @@ export interface UseAudioRecorderReturn {
   audioUrl: string | null;
   duration: number;
   analyserNode: AnalyserNode | null;
+  error: string | null;
   startRecording: () => Promise<void>;
   stopRecording: () => void;
   resetRecording: () => void;
@@ -21,6 +22,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [duration, setDuration] = useState<number>(0);
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Refs so callbacks always see fresh values without re-creating them
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -98,14 +100,25 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     if (state === 'recording' || state === 'requesting') return;
 
     setState('requesting');
+    setError(null);
     chunksRef.current = [];
     setDuration(0);
+
+    // Check for secure context and mediaDevices support
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError('Microphone access requires a secure connection (HTTPS).');
+      setState('idle');
+      return;
+    }
 
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
-      // Permission denied or device unavailable — fall back to idle silently
+    } catch (err) {
+      const msg = err instanceof DOMException && err.name === 'NotAllowedError'
+        ? 'Microphone permission denied. Please allow microphone access and try again.'
+        : 'Could not access microphone. Please check your device settings.';
+      setError(msg);
       setState('idle');
       return;
     }
@@ -208,6 +221,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     setAudioBlob(null);
     setAudioUrl(null);
     setDuration(0);
+    setError(null);
     setState('idle');
   }, [teardownAudio]);
 
@@ -231,6 +245,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     audioUrl,
     duration,
     analyserNode,
+    error,
     startRecording,
     stopRecording,
     resetRecording,

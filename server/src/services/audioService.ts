@@ -23,8 +23,9 @@ export function saveAudioFile(
   file: Express.Multer.File,
   challengeId: string,
 ): string {
-  // Validate MIME type
-  if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+  // Validate MIME type (strip codec parameters like ";codecs=opus")
+  const baseMime = file.mimetype.split(';')[0]!.trim();
+  if (!ALLOWED_MIME_TYPES.has(baseMime)) {
     throw new Error(
       `Unsupported audio format "${file.mimetype}". Allowed: audio/webm, audio/ogg, audio/mp4.`,
     );

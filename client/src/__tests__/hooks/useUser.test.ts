@@ -7,12 +7,16 @@ import type { UserResponse, UserStatsResponse } from '@/types';
 // Mock @/lib/api
 // ---------------------------------------------------------------------------
 
-vi.mock('@/lib/api', () => ({
-  createUser: vi.fn(),
-  updateUser: vi.fn(),
-  getUser: vi.fn(),
-  getUserStats: vi.fn(),
-}));
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return {
+    ...actual,
+    createUser: vi.fn(),
+    updateUser: vi.fn(),
+    getUser: vi.fn(),
+    getUserStats: vi.fn(),
+  };
+});
 
 import {
   createUser as apiCreateUser,
